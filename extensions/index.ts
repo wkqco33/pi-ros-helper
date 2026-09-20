@@ -16,7 +16,9 @@ import { inspectParameters, diffParameters } from "../src/runtime/params.ts";
 import { analyzeLog } from "../src/runtime/logs.ts";
 import { queryBag } from "../src/bag/query.ts";
 import { runConfirmedControl } from "../src/runtime/control.ts";
-import { join } from "node:path";
+import { join, resolve, dirname } from "node:path";
+import { mkdir, writeFile } from "node:fs/promises";
+import { withFileMutationQueue } from "@earendil-works/pi-coding-agent";
 import { scaffold } from "../src/generate/scaffold.ts";
 import { packageScaffold } from "../src/generate/package.ts";
 
@@ -154,6 +156,26 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.registerTool({
+    name: "ros_package_scaffold",
+    label: "ROS Package Scaffold",
+    description: "Write a reviewed ROS 2 package scaffold to a selected directory. Requires explicit confirmation and never overwrites existing files.",
+    promptSnippet: "Create a confirmed ROS 2 package scaffold",
+    parameters: Type.Object({ packageName: Type.String(), nodeName: Type.String(), language: Type.Union([Type.Literal("python"), Type.Literal("cpp")]), destination: Type.String(), execute: Type.Optional(Type.Boolean()) }),
+    async execute(_id, params, _signal, _update, ctx) {
+      const started = Date.now();
+      try {
+        const generated = packageScaffold(params); const root = resolve(ctx.cwd, params.destination); const files = Object.entries(generated.files).map(([path, content]) => ({ path: resolve(root, path), content }));
+        const command = { executable: "write-files", args: files.map((file) => file.path), cwd: root };
+        if (!params.execute) return text(result(ctx.cwd, started, { ok: true, summary: `Scaffold preview contains ${files.length} file(s); nothing was written.`, data: generated, evidence: [{ kind: "scaffold_write_preview", root, files: files.map((file) => file.path) }], warnings: [{ code: "PREVIEW_ONLY", message: "Set execute=true to write new files after confirmation.", severity: "warning" as const }], errors: [], suggestions: [], commands: [command] }));
+        if (!ctx.hasUI || !(await ctx.ui.confirm("Create ROS 2 package?", `${root}\n${files.length} new files will be created. Existing files are never overwritten.`))) return text(failure(ctx.cwd, started, "Scaffold creation cancelled or requires interactive confirmation.", "UNSAFE_OPERATION_DENIED", { commands: [command] }));
+        await mkdir(root, { recursive: true });
+        for (const file of files) await withFileMutationQueue(file.path, async () => { try { await writeFile(file.path, file.content, { flag: "wx" }); } catch (error) { if ((error as NodeJS.ErrnoException).code === "EEXIST") throw new Error(`Refusing to overwrite existing file: ${file.path}`); throw error; } });
+        return text(result(ctx.cwd, started, { ok: true, summary: `Created ${files.length} new ROS 2 package file(s).`, data: { root, files: files.map((file) => file.path) }, evidence: [{ kind: "scaffold_created", root }], warnings: [], errors: [], suggestions: [], commands: [command] }));
+      } catch (error) { return text(failure(ctx.cwd, started, error instanceof Error ? error.message : String(error), "SCAFFOLD_FAILED")); }
+    },
+  });
+
+  pi.registerTool({
     name: "ros_package_scaffold_preview",
     label: "ROS Package Preview",
     description: "Generate a complete minimal ROS 2 package layout in memory for review; no files are written.",
@@ -260,6 +282,20 @@ export default function (pi: ExtensionAPI) {
       if (!confirmed) return text(failure(ctx.cwd, started, "Topic publish cancelled by user.", "UNSAFE_OPERATION_DENIED", { commands: [command] }));
       const run = await runCommand(command.executable, command.args, { cwd: ctx.cwd, signal, timeoutMs: 10000, maxBytes: 10000 });
       return text(result(ctx.cwd, started, { ok: run.code === 0, summary: run.code === 0 ? "One ROS topic message was published." : "ROS topic publish failed.", data: { stdout: run.stdout, stderr: run.stderr }, evidence: [{ kind: "topic_publish", topic: params.topic, highRisk: isHighRiskTopic(params.topic) }], warnings: [], errors: run.code === 0 ? [] : [{ code: "PUBLISH_FAILED", message: run.stderr || "Publish command failed.", severity: "error" as const }], suggestions: [], commands: [command], truncated: run.truncated }));
+    },
+  });
+
+  pi.registerTool({
+    name: "ros_launch_preview",
+    label: "ROS Launch Preview",
+    description: "Resolve launch arguments with ros2 launch --show-args without starting nodes or processes.",
+    promptSnippet: "Preview ROS 2 launch arguments without launching",
+    parameters: Type.Object({ package: Type.String(), launchFile: Type.String(), arguments: Type.Optional(Type.Array(Type.String())) }),
+    async execute(_id, params, signal, _update, ctx) {
+      const started = Date.now(); const command = { executable: "ros2", args: ["launch", params.package, params.launchFile, "--show-args", ...(params.arguments ?? [])], cwd: ctx.cwd };
+      const run = await runCommand(command.executable, command.args, { cwd: ctx.cwd, signal, timeoutMs: 15000, maxBytes: 50_000 });
+      const failed = run.code !== 0 || run.timedOut || run.cancelled;
+      return text(result(ctx.cwd, started, { ok: !failed, summary: failed ? "Launch argument preview failed; no nodes were started." : "Launch arguments resolved successfully; no nodes were started.", data: { stdout: run.stdout, stderr: run.stderr }, evidence: [{ kind: "launch_show_args", package: params.package, launchFile: params.launchFile }], warnings: run.truncated ? [{ code: "OUTPUT_TRUNCATED", message: "Launch preview output was truncated.", severity: "warning" as const }] : [], errors: failed ? [{ code: "LAUNCH_PREVIEW_FAILED", message: run.stderr || "ros2 launch --show-args failed.", severity: "error" as const }] : [], suggestions: [], commands: [command], truncated: run.truncated }));
     },
   });
 

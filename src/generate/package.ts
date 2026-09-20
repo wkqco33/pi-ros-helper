@@ -1,5 +1,7 @@
 export interface PackageScaffoldInput { packageName: string; language: "python" | "cpp"; nodeName: string; }
 export function packageScaffold(input: PackageScaffoldInput) {
+  if (!/^[a-z][a-z0-9_]*$/.test(input.packageName)) throw new Error("packageName must use lowercase letters, digits, and underscores");
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(input.nodeName)) throw new Error("nodeName must be a valid identifier");
   const py = input.language === "python";
   const files: Record<string, string> = {};
   files[`${input.packageName}/package.xml`] = `<?xml version="1.0"?>\n<package format="3">\n  <name>${input.packageName}</name>\n  <version>0.1.0</version>\n  <description>ROS 2 package</description>\n  <maintainer email="todo@example.com">TODO</maintainer>\n  <license>Apache-2.0</license>\n  <buildtool_depend>ament_${py ? "python" : "cmake"}</buildtool_depend>\n  <depend>rcl${py ? "py" : "cpp"}</depend>\n  <export><build_type>ament_${py ? "python" : "cmake"}</build_type></export>\n</package>\n`;
