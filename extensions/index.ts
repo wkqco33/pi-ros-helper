@@ -6,6 +6,8 @@ import { analyzePackage } from "../src/package/analyze.ts";
 import { failure, result } from "../src/core/result.ts";
 import { runCommand } from "../src/core/runner.ts";
 import { classifyColconOutput, readTestResults } from "../src/build/colcon.ts";
+import { snapshotGraph, diffGraphs, type GraphSnapshot } from "../src/runtime/graph.ts";
+import { inspectQos } from "../src/runtime/qos.ts";
 
 const text = (value: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(value, null, 2) }], details: value });
 
@@ -89,6 +91,55 @@ export default function (pi: ExtensionAPI) {
       } catch (error) {
         return text(failure(ctx.cwd, started, error instanceof Error ? error.message : String(error), "OUTPUT_PARSE_FAILED"));
       }
+    },
+  });
+
+  pi.registerTool({
+    name: "ros_qos_check",
+    label: "ROS QoS Check",
+    description: "Inspect publisher/subscriber QoS for a ROS 2 topic and report likely compatibility mismatches.",
+    promptSnippet: "Check ROS 2 topic QoS compatibility",
+    promptGuidelines: ["Use ros_qos_check when discovery succeeds but a subscriber receives no messages."],
+    parameters: Type.Object({ topic: Type.String() }),
+    async execute(_id, params, signal, _update, ctx) {
+      const started = Date.now();
+      try {
+        const data = await inspectQos(ctx.cwd, params.topic, signal);
+        return text(result(ctx.cwd, started, { ok: data.compatibility !== "potential_mismatch", summary: data.notes.length ? `Potential QoS mismatch detected on ${params.topic}.` : `No obvious QoS mismatch detected on ${params.topic}.`, data, evidence: data.notes.map((message) => ({ kind: "qos_mismatch", message })), warnings: data.notes.map((message) => ({ code: "QOS_MISMATCH", message, severity: "warning" as const })), errors: [], suggestions: data.notes.length ? [{ message: "Compare reliability and durability with the intended QoS profile, especially sensor data topics.", confidence: "high" as const }] : [] }));
+      } catch (error) { return text(failure(ctx.cwd, started, error instanceof Error ? error.message : String(error), "GRAPH_UNAVAILABLE")); }
+    },
+  });
+
+  pi.registerTool({
+    name: "ros_graph_snapshot",
+    label: "ROS Graph Snapshot",
+    description: "Capture a bounded snapshot of ROS 2 nodes, topics with types, and services using ros2 CLI.",
+    promptSnippet: "Capture the current ROS 2 graph",
+    promptGuidelines: ["Use ros_graph_snapshot to compare runtime state before and after launching nodes."],
+    parameters: Type.Object({}),
+    async execute(_id, _params, signal, _update, ctx) {
+      const started = Date.now();
+      try {
+        const data = await snapshotGraph(ctx.cwd, signal);
+        return text(result(ctx.cwd, started, { ok: true, summary: `Captured ${data.nodes.length} node(s), ${data.topics.length} topic(s), and ${data.services.length} service(s).`, data, evidence: [{ kind: "graph_snapshot", nodeCount: data.nodes.length, topicCount: data.topics.length, serviceCount: data.services.length }], warnings: [], errors: [], suggestions: [] }));
+      } catch (error) { return text(failure(ctx.cwd, started, error instanceof Error ? error.message : String(error), "GRAPH_UNAVAILABLE")); }
+    },
+  });
+
+  pi.registerTool({
+    name: "ros_graph_diff",
+    label: "ROS Graph Diff",
+    description: "Compare a saved ROS graph snapshot with a current live snapshot or another supplied snapshot.",
+    promptSnippet: "Compare ROS 2 graph snapshots",
+    parameters: Type.Object({ previous: Type.Unknown(), current: Type.Optional(Type.Unknown()) }),
+    async execute(_id, params, signal, _update, ctx) {
+      const started = Date.now();
+      try {
+        const previous = params.previous as GraphSnapshot;
+        const current = (params.current as GraphSnapshot | undefined) ?? await snapshotGraph(ctx.cwd, signal);
+        const data = diffGraphs(previous, current);
+        return text(result(ctx.cwd, started, { ok: true, summary: "ROS graph comparison completed.", data, evidence: [{ kind: "graph_diff", data }], warnings: [], errors: [], suggestions: [] }));
+      } catch (error) { return text(failure(ctx.cwd, started, error instanceof Error ? error.message : String(error), "INVALID_ARGUMENT")); }
     },
   });
 
