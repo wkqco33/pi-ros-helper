@@ -17,8 +17,8 @@ license: Apache-2.0
 5. 파라미터 YAML 또는 런치 파일 값을 수정하기 전에 `ros_parameter_validate`를 사용하세요. 미선언되거나 타입이 불일치하는 파라미터는 구성 오류로 취급해야 합니다.
 6. 런치 파일을 실행하기 전에 `ros_launch_validate`를 사용하세요. (정적 검증만으로는 동적 Python 런치 동작을 완벽히 보장할 수 없음을 유의하세요.)
 7. 빌드 실패 발생 시, 제한된 출력에 대해 `ros_failure_diagnose`를 실행하고 후속 실패 이전에 가장 먼저 발생한 컴파일러/CMake/rosidl 오류를 확인하세요.
-8. 소스 코드 수정 후에는 `ros_test_select`로 집중 테스트 대상을 선택하거나, 재빌드와 테스트를 단일 완료 게이트로 묶어 다룰 때 `ros_validation_bundle`을 사용하세요.
-9. `colcon test`는 자동으로 재빌드하지 않습니다. 소스나 테스트 코드를 수정한 후에는 `ros_test` 전에 반드시 `ros_build`를 실행해야 합니다. `STALE_TEST_ARTIFACTS` 경고는 테스트 바이너리가 소스 코드보다 오래되었음을 의미합니다.
+8. 소스 코드 수정 후에는 `ros_test_select`로 집중 테스트 대상을 선택하거나, 재빌드와 테스트를 단일 완료 게이트로 묶어 다룰 때 `ros_validation_bundle`을 사용하세요. `testTargets`를 전달하여 특정 대상만 집중 빌드 및 검증할 수 있습니다.
+9. `colcon test`는 자동으로 재빌드하지 않습니다. 소스나 테스트 코드를 수정한 후에는 `ros_test` 전에 반드시 `ros_build`를 실행해야 합니다. `ros_test`에 `testTargets`를 지정하면 안전한 CTest 필터링과 함께 해당 대상만의 테스트 결과로 범위를 제한하여 확인할 수 있습니다. `STALE_TEST_ARTIFACTS` 경고는 테스트 바이너리가 소스 코드보다 오래되었음을 의미합니다.
 10. 작업 완료를 보고하기 전에 `ros_tdd_checkpoint`와 `ros_completion_evidence`를 사용하여 검증을 완수하세요.
 11. 런치 또는 통합 변경 후 기대하는 그래프 형상을 알고 있는 경우 `ros_graph_assert`를 사용하세요.
 12. 런타임 통신 장애가 발생한 경우: 그래프(Graph) → 타입(Type) → QoS → TF 순서로 점검하세요.

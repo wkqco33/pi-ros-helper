@@ -2,6 +2,16 @@
 
 All notable changes are documented here.
 
+## [0.1.10] - 2026-09-20
+
+### Fixed
+
+- `ros_test`: Scope JUnit test result collection to specified `testTargets`, preventing unrelated test binary results from polluting the failure summary.
+
+### Added
+
+- `ros_validation_bundle`: Support `testTargets` parameter for focused CTest execution and target-scoped JUnit test result collection.
+
 ## [0.1.9] - 2026-09-20
 
 ### Improved

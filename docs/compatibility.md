@@ -13,4 +13,4 @@
 
 ## 릴리스 호환성 (Release compatibility)
 
-본 패키지는 유의적 버전(Semantic Versioning)을 준수합니다. `0.y.z` 시리즈에서는 공개 도구 스키마가 변경될 수 있으며, 하위 호환성을 깨뜨리는 변경사항은 `CHANGELOG.md`에 명시됩니다. 릴리스 태그는 `package.json`에 명시된 버전과 반드시 일치해야 합니다 (예: `v0.1.8`).
+본 패키지는 유의적 버전(Semantic Versioning)을 준수합니다. `0.y.z` 시리즈에서는 공개 도구 스키마가 변경될 수 있으며, 하위 호환성을 깨뜨리는 변경사항은 `CHANGELOG.md`에 명시됩니다. 릴리스 태그는 `package.json`에 명시된 버전과 반드시 일치해야 합니다 (예: `v0.1.10`).

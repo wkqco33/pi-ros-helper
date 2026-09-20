@@ -4,7 +4,7 @@
 
 ## 현재 지원 현황
 
-버전 `0.1.8`은 내장된 `ros2-development` 스킬에 정의된 범위 제한(bounded) 검사, 품질 게이트, 명시적 확인 기반 제어 도구를 제공합니다:
+버전 `0.1.10`은 내장된 `ros2-development` 스킬에 정의된 범위 제한(bounded) 검사, 품질 게이트, 명시적 확인 기반 제어 도구를 제공합니다:
 
 ### 정적 분석, 작업 공간 및 패키징 (Static Analysis, Workspace & Packaging)
 - `ros_environment` — ROS 배포판(distro), RMW, 도메인 ID, 환경 설정 파일 및 작업 공간 탐색 상태 검사
@@ -18,14 +18,13 @@
 
 ### 빌드, 테스트 및 장애 진단 (Build, Test & Failure Diagnosis)
 - `ros_build` — 제한된(bounded) `colcon build` 미리보기 또는 명시적 실행; 파일, 플래그, 빈도별 컴파일러 경고 요약
-- `ros_test` — `colcon test` 미리보기 또는 명시적 실행; 실패한 테스트 케이스를 바이너리, 스위트, 소스 파일, 라인 번호 단위로 추적하며 테스트 바이너리가 소스보다 오래된 경우 경고(`STALE_TEST_ARTIFACTS`) 발생
+- `ros_test` — `colcon test` 미리보기 또는 명시적 실행; 실패한 테스트 케이스를 바이너리, 스위트, 소스 파일, 라인 번호 단위로 추적하며 테스트 바이너리가 소스보다 오래된 경우 경고(`STALE_TEST_ARTIFACTS`) 발생; 선택된 `testTargets`에 대해 안전한 CTest 정규식 필터링 및 테스트 결과 수집 범위 제한 지원
 - `ros_test_select` — 테스트를 직접 실행하지 않고 변경된 소스 경로와 연관된 집중 테스트 대상 선별
-- `ros_test` — 선택된 `testTargets`를 안전하게 이스케이프한 CTest 정규식으로 집중 실행 지원
 - `ros_failure_diagnose` — 첫 번째 실행 가능한 colcon/컴파일러/CMake/rosidl 실패 원인을 분류하고 맞춤형 해결 가이드 제시
 - `ros_log_analyze` — ROS 데몬, colcon 빌드, 테스트 로그에서 오류, 경고 및 실패한 테스트 케이스 요약
 
 ### 검증 및 완료 게이트 (Validation & Completion Gates)
-- `ros_validation_bundle` — 빌드 후 테스트 연계 시퀀스 미리보기 또는 실행; 오래된(stale) 테스트 아티팩트 감지 시 게이트 실패 처리
+- `ros_validation_bundle` — 빌드 후 테스트 연계 시퀀스 미리보기 또는 실행; 선택적 `testTargets` 기반 집중 테스트 필터링 및 결과 범위 제한 지원, 오래된(stale) 테스트 아티팩트 감지 시 게이트 실패 처리
 - `ros_tdd_checkpoint` — 소스 코드 변경에 부합하는 연관 테스트 코드 변경이 있는지 검증
 - `ros_completion_evidence` — 실행된 빌드 및 테스트 결과를 기반으로 구현 완료 여부를 보수적으로 판정
 - `ros_graph_assert` — 기대하는 노드, 토픽, 서비스 구성과 활성 ROS 그래프 상태 비교 검증
