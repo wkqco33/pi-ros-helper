@@ -18,6 +18,7 @@ import { queryBag } from "../src/bag/query.ts";
 import { runConfirmedControl } from "../src/runtime/control.ts";
 import { join } from "node:path";
 import { scaffold } from "../src/generate/scaffold.ts";
+import { packageScaffold } from "../src/generate/package.ts";
 
 const text = (value: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(value, null, 2) }], details: value });
 
@@ -149,6 +150,32 @@ export default function (pi: ExtensionAPI) {
     async execute(_id, params, _signal, _update, ctx) {
       const started = Date.now();
       try { const data = await analyzeLog(params.path); return text(result(ctx.cwd, started, { ok: data.errors.length === 0, summary: `${data.lines} log line(s), ${data.errors.length} error(s), ${data.warnings.length} warning(s).`, data, evidence: [{ kind: "log_summary", path: params.path }], warnings: data.warnings.length ? [{ code: "LOG_WARNINGS", message: `${data.warnings.length} warning line(s) found.`, severity: "warning" as const }] : [], errors: [], suggestions: [] })); } catch (error) { return text(failure(ctx.cwd, started, error instanceof Error ? error.message : String(error), "OUTPUT_PARSE_FAILED")); }
+    },
+  });
+
+  pi.registerTool({
+    name: "ros_package_scaffold_preview",
+    label: "ROS Package Preview",
+    description: "Generate a complete minimal ROS 2 package layout in memory for review; no files are written.",
+    promptSnippet: "Preview a complete ROS 2 package scaffold",
+    parameters: Type.Object({ packageName: Type.String(), nodeName: Type.String(), language: Type.Union([Type.Literal("python"), Type.Literal("cpp")]) }),
+    async execute(_id, params, _signal, _update, ctx) {
+      const started = Date.now(); const data = packageScaffold(params);
+      return text(result(ctx.cwd, started, { ok: true, summary: `Generated a ${params.language} ROS 2 package preview.`, data, evidence: [{ kind: "package_scaffold_preview", packageName: params.packageName }], warnings: [{ code: "PREVIEW_ONLY", message: "No files were written.", severity: "info" as const }], errors: [], suggestions: [] }));
+    },
+  });
+
+  pi.registerTool({
+    name: "ros_lifecycle_transition",
+    label: "ROS Lifecycle Transition",
+    description: "Preview or execute one lifecycle transition. Requires explicit opt-in and interactive confirmation.",
+    promptSnippet: "Preview or confirm one ROS 2 lifecycle transition",
+    parameters: Type.Object({ node: Type.String(), transition: Type.String(), execute: Type.Optional(Type.Boolean()) }),
+    async execute(_id, params, signal, _update, ctx) {
+      const started = Date.now(); const command = { executable: "ros2", args: ["lifecycle", "set", params.node, params.transition], cwd: ctx.cwd };
+      if (!params.execute) return text(result(ctx.cwd, started, { ok: true, summary: "Lifecycle transition preview generated; no transition was made.", evidence: [{ kind: "command_preview", ...command }], warnings: [{ code: "CONTROL_PREVIEW", message: "Lifecycle transitions change node runtime state.", severity: "warning" as const }], errors: [], suggestions: [], commands: [command] }));
+      if (!ctx.hasUI || !(await ctx.ui.confirm("Confirm lifecycle transition", `${params.node} → ${params.transition}`))) return text(failure(ctx.cwd, started, "Lifecycle transition cancelled or requires interactive confirmation.", "UNSAFE_OPERATION_DENIED", { commands: [command] }));
+      const run = await runConfirmedControl(command, signal); return text(result(ctx.cwd, started, { ok: run.code === 0, summary: run.code === 0 ? "Lifecycle transition completed." : "Lifecycle transition failed.", data: { stdout: run.stdout, stderr: run.stderr }, evidence: [{ kind: "lifecycle_transition", node: params.node, transition: params.transition }], warnings: [], errors: run.code === 0 ? [] : [{ code: "LIFECYCLE_FAILED", message: run.stderr || "Lifecycle transition failed.", severity: "error" as const }], suggestions: [], commands: [command], truncated: run.truncated }));
     },
   });
 
