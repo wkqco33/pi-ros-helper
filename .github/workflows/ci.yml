@@ -37,6 +37,21 @@ jobs:
           name: npm-pack-manifest
           path: pack.json
 
+  ros-runtime:
+    name: ROS 2 ${{ matrix.distro }} smoke test
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        distro: [humble, jazzy]
+    container: ros:${{ matrix.distro }}-ros-base
+    steps:
+      - name: ROS CLI smoke test
+        shell: bash
+        run: |
+          source /opt/ros/${ROS_DISTRO}/setup.bash
+          ros2 topic list -t
+
   extension-smoke:
     name: pi extension smoke test
     runs-on: ubuntu-latest
