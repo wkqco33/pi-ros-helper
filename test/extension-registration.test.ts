@@ -50,6 +50,7 @@ test('extension registers its core tools without a ROS install', () => {
   ]) {
     assert.ok(tools.has(name), `expected ${name} to be registered`);
   }
+  assert.equal(tools.size, 34, 'all 34 ROS tools should be registered');
   assert.deepEqual(commands, ['ros-status']);
 });
 
@@ -69,4 +70,26 @@ test('ros_scaffold_preview accepts the node kind and emits parameter code', asyn
   );
   const files = response.details?.data?.files ?? {};
   assert.match(files['telemetry_node/src/telemetry_node.cpp'] ?? '', /declare_parameter/);
+});
+
+test('individual tool registrar modules can be invoked independently', async () => {
+  const { registerEnvironmentTools, registerBuildTools } = await import('../src/tools/index.ts');
+  const tools = new Map<string, RegisteredTool>();
+  const mockApi = {
+    registerTool: (tool: RegisteredTool) => {
+      tools.set(tool.name, tool);
+    },
+    registerCommand: () => {},
+  } as unknown as Parameters<typeof register>[0];
+
+  registerEnvironmentTools(mockApi);
+  assert.ok(tools.has('ros_environment'));
+  assert.equal(tools.size, 1);
+
+  registerBuildTools(mockApi);
+  assert.ok(tools.has('ros_build'));
+  assert.ok(tools.has('ros_test'));
+  assert.ok(tools.has('ros_failure_diagnose'));
+  assert.ok(tools.has('ros_test_select'));
+  assert.equal(tools.size, 5);
 });
