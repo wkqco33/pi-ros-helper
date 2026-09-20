@@ -2,6 +2,18 @@
 
 All notable changes are documented here.
 
+## [Unreleased]
+
+### Fixed
+
+- `ros_test` no longer reports a stale pass silently. `colcon test` does not rebuild, so a run could succeed against a test binary that predates the current sources. The tool now compares the compiled test binaries under `build/` with source and build files, and raises a `STALE_TEST_ARTIFACTS` warning with `staleArtifacts` details when the sources are newer. Documentation and log changes do not trigger the warning, and Python-only workspaces without compiled test binaries are left alone.
+
+### Added
+
+- `detectStaleTestArtifacts`, a pure helper that reports the newest source and test binary when a compiled test binary is out of date.
+- `ros_test` now states in its description and prompt guidelines that `ros_build` must run before `ros_test` after editing sources, and the bundled `ros2-development` skill lists the same rule in its investigation order.
+- Regression tests for stale, fresh, Python-only, documentation-only, build-file, and build-tree staleness cases.
+
 ## [0.1.5] - 2026-09-20
 
 ### Fixed

@@ -11,6 +11,7 @@ import {
   summarizeBuildWarnings,
   summarizeTestResults,
 } from '../src/build/colcon.ts';
+import { detectStaleTestArtifacts } from '../src/build/staleness.ts';
 import { snapshotGraph, diffGraphs, type GraphSnapshot } from '../src/runtime/graph.ts';
 import { inspectQos } from '../src/runtime/qos.ts';
 import { analyzeLaunch } from '../src/launch/analyze.ts';
@@ -21,7 +22,7 @@ import { inspectParameters, diffParameters } from '../src/runtime/params.ts';
 import { analyzeLog } from '../src/runtime/logs.ts';
 import { queryBag } from '../src/bag/query.ts';
 import { runConfirmedControl } from '../src/runtime/control.ts';
-import { join, resolve, dirname } from 'node:path';
+import { join, resolve, dirname, basename } from 'node:path';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { scaffold } from '../src/generate/scaffold.ts';
 import { packageScaffold } from '../src/generate/package.ts';
@@ -1296,10 +1297,11 @@ export default function (pi: ExtensionAPI) {
     name: 'ros_test',
     label: 'ROS Test',
     description:
-      'Preview or run bounded colcon test and summarize JUnit results and likely failures.',
+      'Preview or run bounded colcon test and summarize JUnit results and likely failures. colcon test does not build, so run ros_build after changing sources before trusting a pass.',
     promptSnippet: 'Preview or run ROS 2 tests and summarize failures',
     promptGuidelines: [
       'Use ros_test with execute false first; inspect the first failure before rerunning selected tests.',
+      'ros_test does not rebuild: after changing test or source files run ros_build first, or the run may report a stale pass.',
     ],
     parameters: Type.Object({
       packages: Type.Optional(Type.Array(Type.String())),
@@ -1355,6 +1357,12 @@ export default function (pi: ExtensionAPI) {
         run.code !== 0 ||
         totals.failures > 0 ||
         testResults.some((item) => item.failures > 0);
+      // colcon test never rebuilds, so compare the compiled test binaries with
+      // the current sources before the caller trusts a pass.
+      const stale = await detectStaleTestArtifacts(workspace.root);
+      const staleMessage = stale
+        ? `Test binary ${basename(stale.newestBinary.path)} predates ${stale.newestSource.path}; run ros_build and re-run before trusting this result.`
+        : undefined;
       return text(
         result(ctx.cwd, started, {
           ok: !failed,
@@ -1364,11 +1372,21 @@ export default function (pi: ExtensionAPI) {
               ? 'Tests timed out.'
               : failed
                 ? `One or more ROS 2 tests failed (${totals.failures} case(s)).`
-                : `ROS 2 tests completed successfully (${totals.tests} test(s)).`,
+                : stale
+                  ? `ROS 2 tests reported ${totals.tests} test(s) passing, but the test binaries predate the current sources.`
+                  : `ROS 2 tests completed successfully (${totals.tests} test(s)).`,
           data: {
             exitCode: run.code,
             testSummary: totals,
             failingTests,
+            staleArtifacts: stale
+              ? {
+                  source: stale.newestSource.path,
+                  binary: stale.newestBinary.path,
+                  sourceModifiedAt: new Date(stale.newestSource.mtimeMs).toISOString(),
+                  binaryBuiltAt: new Date(stale.newestBinary.mtimeMs).toISOString(),
+                }
+              : null,
             testResults,
             failures,
             stdout: run.stdout,
@@ -1384,15 +1402,26 @@ export default function (pi: ExtensionAPI) {
             })),
             ...failures.map((item) => ({ kind: item.kind, message: item.message })),
           ],
-          warnings: run.truncated
-            ? [
-                {
-                  code: 'OUTPUT_TRUNCATED',
-                  message: 'Test output was truncated.',
-                  severity: 'warning' as const,
-                },
-              ]
-            : [],
+          warnings: [
+            ...(run.truncated
+              ? [
+                  {
+                    code: 'OUTPUT_TRUNCATED',
+                    message: 'Test output was truncated.',
+                    severity: 'warning' as const,
+                  },
+                ]
+              : []),
+            ...(staleMessage
+              ? [
+                  {
+                    code: 'STALE_TEST_ARTIFACTS',
+                    message: staleMessage,
+                    severity: 'warning' as const,
+                  },
+                ]
+              : []),
+          ],
           errors: failed
             ? [
                 {
@@ -1419,7 +1448,14 @@ export default function (pi: ExtensionAPI) {
                   confidence: 'high' as const,
                 },
               ]
-            : [],
+            : stale
+              ? [
+                  {
+                    message: 'Run ros_build and re-run ros_test before reporting a passing result.',
+                    confidence: 'high' as const,
+                  },
+                ]
+              : [],
           commands: [command],
           truncated: run.truncated,
         }),

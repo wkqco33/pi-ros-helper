@@ -4,18 +4,18 @@ ROS 2 development tools for the [pi coding agent](https://github.com/badlogic/pi
 
 ## Current status
 
-Version `0.1.5` ships the bounded inspection and control tools documented by the bundled `ros2-development` skill, including:
+Version `0.1.6` ships the bounded inspection and control tools documented by the bundled `ros2-development` skill, including:
 
 - `ros_environment` — inspect ROS distro, RMW, domain, setup files, and workspace discovery
 - `ros_workspace_inspect` — enumerate packages and detect duplicate package names
 - `ros_package_analyze` — compare `package.xml` with build files; accepts a package name or a path
 - `ros_build` — preview or explicitly run a bounded `colcon build`; summarizes compiler warnings by file and flag
-- `ros_test` — preview or explicitly run `colcon test`; reports failing test cases with suite, file, and line
+- `ros_test` — preview or explicitly run `colcon test`; reports failing test cases with suite, file, and line, and warns when the test binaries are older than the sources
 - `ros_log_analyze` — summarize errors, warnings, and failing test lines in a ROS, colcon, or test log
 - `ros_scaffold_preview` — preview publisher, subscriber, or plain node source for C++ and Python
 - `/ros-status` — concise interactive status notification
 
-The extension is intentionally safe by default. `ros_build` never executes unless `execute: true` is supplied.
+The extension is intentionally safe by default. `ros_build` never executes unless `execute: true` is supplied. `colcon test` does not rebuild, so run `ros_build` after changing sources before trusting a `ros_test` pass; `ros_test` raises a `STALE_TEST_ARTIFACTS` warning when it can tell the binaries are out of date.
 
 ## Install for development
 

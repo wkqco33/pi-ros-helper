@@ -14,8 +14,9 @@ Use the ROS-specific tools before falling back to raw shell commands.
 2. Run `ros_workspace_inspect` before selecting packages for a build. It discovers both a colcon `src` layout and a single-package repository with `package.xml` at the root.
 3. Use `ros_package_analyze` with a package name or a path before editing `package.xml` or build files.
 4. For build failures, inspect the first compiler/CMake/rosidl error before downstream failures.
-5. For runtime communication failures, inspect graph, type, QoS, and TF in that order.
-6. Keep topic sampling bounded; never start an unbounded `ros2 topic echo`.
+5. `colcon test` does not rebuild. After editing sources or tests, run `ros_build` before `ros_test`; a `STALE_TEST_ARTIFACTS` warning means the result came from an outdated binary.
+6. For runtime communication failures, inspect graph, type, QoS, and TF in that order.
+7. Keep topic sampling bounded; never start an unbounded `ros2 topic echo`.
 
 ## Safety
 
