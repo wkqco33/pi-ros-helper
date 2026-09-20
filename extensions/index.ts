@@ -11,6 +11,9 @@ import { inspectQos } from "../src/runtime/qos.ts";
 import { analyzeLaunch } from "../src/launch/analyze.ts";
 import { inspectBag } from "../src/bag/info.ts";
 import { isHighRiskTopic } from "../src/core/safety.ts";
+import { diagnoseTf } from "../src/runtime/tf.ts";
+import { inspectParameters, diffParameters } from "../src/runtime/params.ts";
+import { analyzeLog } from "../src/runtime/logs.ts";
 
 const text = (value: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(value, null, 2) }], details: value });
 
@@ -94,6 +97,54 @@ export default function (pi: ExtensionAPI) {
       } catch (error) {
         return text(failure(ctx.cwd, started, error instanceof Error ? error.message : String(error), "OUTPUT_PARSE_FAILED"));
       }
+    },
+  });
+
+  pi.registerTool({
+    name: "ros_tf_diagnose",
+    label: "ROS TF Diagnose",
+    description: "Check whether a bounded TF2 lookup succeeds between two frames and summarize common failures.",
+    promptSnippet: "Diagnose a ROS 2 TF transform lookup",
+    parameters: Type.Object({ source: Type.String(), target: Type.String(), timeoutSeconds: Type.Optional(Type.Integer({ minimum: 1, maximum: 15 })) }),
+    async execute(_id, params, signal, _update, ctx) {
+      const started = Date.now();
+      try { const data = await diagnoseTf(ctx.cwd, params.source, params.target, signal); return text(result(ctx.cwd, started, { ok: data.available, summary: data.available ? `Transform ${params.source} -> ${params.target} is available.` : `Transform ${params.source} -> ${params.target} is unavailable.`, data, evidence: data.issues.map((message) => ({ kind: "tf_issue", message })), warnings: data.issues.map((message) => ({ code: "TF_DIAGNOSTIC", message, severity: "warning" as const })), errors: [], suggestions: [] })); } catch (error) { return text(failure(ctx.cwd, started, error instanceof Error ? error.message : String(error), "GRAPH_UNAVAILABLE")); }
+    },
+  });
+
+  pi.registerTool({
+    name: "ros_param_inspect",
+    label: "ROS Parameters",
+    description: "Dump parameters from a running ROS 2 node with likely secret values redacted.",
+    promptSnippet: "Inspect ROS 2 node parameters",
+    parameters: Type.Object({ node: Type.String() }),
+    async execute(_id, params, signal, _update, ctx) {
+      const started = Date.now();
+      try { const data = await inspectParameters(ctx.cwd, params.node, signal); return text(result(ctx.cwd, started, { ok: true, summary: `Read ${Object.keys(data.parameters).length} parameter(s) from ${params.node}.`, data, evidence: [{ kind: "parameters", node: params.node }], warnings: [], errors: [], suggestions: [] })); } catch (error) { return text(failure(ctx.cwd, started, error instanceof Error ? error.message : String(error), "GRAPH_UNAVAILABLE")); }
+    },
+  });
+
+  pi.registerTool({
+    name: "ros_param_diff",
+    label: "ROS Parameter Diff",
+    description: "Compare two parameter maps supplied as JSON objects without changing a running node.",
+    promptSnippet: "Compare ROS 2 parameter sets",
+    parameters: Type.Object({ left: Type.Record(Type.String(), Type.String()), right: Type.Record(Type.String(), Type.String()) }),
+    async execute(_id, params, _signal, _update, ctx) {
+      const started = Date.now(); const data = diffParameters(params.left, params.right);
+      return text(result(ctx.cwd, started, { ok: data.length === 0, summary: data.length ? `${data.length} parameter difference(s) found.` : "Parameter sets are identical.", data, evidence: [{ kind: "parameter_diff", count: data.length }], warnings: [], errors: [], suggestions: [] }));
+    },
+  });
+
+  pi.registerTool({
+    name: "ros_log_analyze",
+    label: "ROS Log Analyze",
+    description: "Analyze a ROS or colcon log file, summarize errors/warnings, and collapse repeated lines.",
+    promptSnippet: "Analyze ROS 2 logs and find repeated errors",
+    parameters: Type.Object({ path: Type.String() }),
+    async execute(_id, params, _signal, _update, ctx) {
+      const started = Date.now();
+      try { const data = await analyzeLog(params.path); return text(result(ctx.cwd, started, { ok: data.errors.length === 0, summary: `${data.lines} log line(s), ${data.errors.length} error(s), ${data.warnings.length} warning(s).`, data, evidence: [{ kind: "log_summary", path: params.path }], warnings: data.warnings.length ? [{ code: "LOG_WARNINGS", message: `${data.warnings.length} warning line(s) found.`, severity: "warning" as const }] : [], errors: [], suggestions: [] })); } catch (error) { return text(failure(ctx.cwd, started, error instanceof Error ? error.message : String(error), "OUTPUT_PARSE_FAILED")); }
     },
   });
 
