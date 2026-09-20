@@ -25,10 +25,22 @@ For a project-local package, add the path to `.pi/settings.json` or install the 
 
 ```bash
 npm install
+npm test
 npm run typecheck
+# or
+npm run check
 ```
 
 The extension does not require ROS to be installed in order to load. ROS-specific tools report structured diagnostics when `ros2`, `rclpy`, or a workspace is unavailable.
+
+## Support and compatibility
+
+- Node.js 20 or newer
+- ROS 2 Jazzy and Humble are the initial targets
+- Runtime tools require a sourced ROS environment; static workspace and package tools do not
+- The package is licensed under Apache-2.0; see `LICENSE`
+
+See `CHANGELOG.md` for release history and `AGENTS.md` for development rules.
 
 ## Design principles
 

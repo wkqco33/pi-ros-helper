@@ -26,7 +26,8 @@ export function classifyColconOutput(output: string): ColconFailure[] {
     seen.add(line);
     failures.push({ kind, message: line, line });
   }
-  return failures.slice(0, 20);
+  const priority: Record<ColconFailure["kind"], number> = { compiler: 0, linker: 1, cmake: 2, rosidl: 3, python: 4, test: 5, unknown: 6 };
+  return failures.sort((a, b) => priority[a.kind] - priority[b.kind]).slice(0, 20);
 }
 
 export interface TestResult { package: string; tests: number; failures: number; errors: string[]; }
