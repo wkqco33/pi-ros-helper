@@ -2,6 +2,22 @@
 
 All notable changes are documented here.
 
+## [Unreleased]
+
+### Fixed
+
+- `ros_test` no longer labels every JUnit suite `AllTests`. It derives the test binary from the result file name, keeps the real `testsuite` name, and reports each failed case with its suite, test name, source file, and line so `ros_test` can name the failing assertion instead of returning only a generic CTest hint.
+- `ros_log_analyze` classifies test and build framework failures (`ctest` `***Failed`, gtest `[  FAILED  ]`, pytest node ids, `CMake Error`, `AssertionError`, and `N tests failed`) as errors, and lists the failing test lines in a new `testFailures` field. A log full of gtest failures no longer reports zero errors.
+- `ros_build` classifies generated `.cc` and `.c++` sources and location-only diagnostics (`file:line:col: error:`) as compiler failures.
+- `ros_build` collapses repeated compiler warnings into the top offending file/message/flag sites with counts instead of returning the raw warning stream.
+
+### Added
+
+- `summarizeTestResults`, `summarizeBuildWarnings`, and structured `TestCaseFailure` records in the colcon analysis module.
+- `ros_test` reports `testSummary` (suite, test, failure, and skipped totals) and a `failingTests` list.
+- `ros_scaffold_preview` accepts `kind: "node"` and emits a node that declares a parameter and drives a timer for both C++ and Python.
+- Regression tests for JUnit failure attribution, skipped totals, generated-source compiler classification, build warning grouping and capping, test framework log classification, the node scaffold, and extension tool registration.
+
 ## [0.1.4] - 2026-09-20
 
 ### Fixed

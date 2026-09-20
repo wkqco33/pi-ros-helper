@@ -9,7 +9,10 @@ Version `0.1.4` ships the bounded inspection and control tools documented by the
 - `ros_environment` — inspect ROS distro, RMW, domain, setup files, and workspace discovery
 - `ros_workspace_inspect` — enumerate packages and detect duplicate package names
 - `ros_package_analyze` — compare `package.xml` with build files; accepts a package name or a path
-- `ros_build` — preview or explicitly run a bounded `colcon build`
+- `ros_build` — preview or explicitly run a bounded `colcon build`; summarizes compiler warnings by file and flag
+- `ros_test` — preview or explicitly run `colcon test`; reports failing test cases with suite, file, and line
+- `ros_log_analyze` — summarize errors, warnings, and failing test lines in a ROS, colcon, or test log
+- `ros_scaffold_preview` — preview publisher, subscriber, or plain node source for C++ and Python
 - `/ros-status` — concise interactive status notification
 
 The extension is intentionally safe by default. `ros_build` never executes unless `execute: true` is supplied.
