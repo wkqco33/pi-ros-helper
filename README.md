@@ -19,7 +19,13 @@ The extension is intentionally safe by default. `ros_build` never executes unles
 pi -e /absolute/path/to/pi-ros-helper
 ```
 
-For a project-local package, add the path to `.pi/settings.json` or install the published npm/git package with `pi install`.
+For a project-local package, add the path to `.pi/settings.json` or install the npm package:
+
+```bash
+pi install npm:pi-ros-helper@latest
+```
+
+The GitHub Actions release workflow publishes a GitHub release tag such as `v0.1.0` to npm with provenance. The tag must match `package.json`. Before the first release, create the `pi-ros-helper` package on npm by publishing from a trusted local session or configure npm Trusted Publishing for this GitHub repository. After that, publish by creating a GitHub release for the matching tag.
 
 ## Development
 
@@ -40,7 +46,7 @@ The extension does not require ROS to be installed in order to load. ROS-specifi
 - Runtime tools require a sourced ROS environment; static workspace and package tools do not
 - The package is licensed under Apache-2.0; see `LICENSE`
 
-See `CHANGELOG.md` for release history and `AGENTS.md` for development rules.
+See `CHANGELOG.md` for release history, `AGENTS.md` for development rules, `docs/compatibility.md` for supported runtimes, and `SECURITY.md` for vulnerability reporting.
 
 ## Design principles
 

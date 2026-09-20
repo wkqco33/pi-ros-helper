@@ -9,11 +9,21 @@
     "robotics"
   ],
   "license": "Apache-2.0",
-  "files": ["extensions", "src", "helpers", "skills", "README.md", "LICENSE", "CHANGELOG.md"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wkqco33/pi-ros-helper.git"
+  },
+  "bugs": {
+    "url": "https://github.com/wkqco33/pi-ros-helper/issues"
+  },
+  "homepage": "https://github.com/wkqco33/pi-ros-helper#readme",
+  "files": ["extensions", "src", "helpers", "skills", "docs", "README.md", "LICENSE", "SECURITY.md", "CHANGELOG.md"],
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "tsx --test test/**/*.test.ts",
-    "check": "npm test && npm run typecheck"
+    "test:coverage": "tsx --test --experimental-test-coverage test/**/*.test.ts",
+    "pack-check": "npm pack --dry-run",
+    "check": "npm test && npm run typecheck && npm run pack-check"
   },
   "pi": {
     "extensions": [
