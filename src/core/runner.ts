@@ -1,5 +1,4 @@
 import { spawn } from 'node:child_process';
-import { once } from 'node:events';
 
 export interface RunOptions {
   cwd: string;
@@ -46,6 +45,7 @@ export async function runCommand(
   let truncated = false;
   let timedOut = false;
   let cancelled = false;
+  let spawnError: Error | undefined;
   const onAbort = () => {
     cancelled = true;
     terminate(child);
@@ -58,6 +58,9 @@ export async function runCommand(
       }, options.timeoutMs)
     : undefined;
 
+  child.on('error', (error) => {
+    spawnError = error;
+  });
   child.stdout.on('data', (chunk: Buffer) => {
     const [next, wasTruncated] = appendLimited(stdout, chunk.toString(), maxBytes);
     stdout = next;
@@ -68,9 +71,12 @@ export async function runCommand(
     stderr = next;
     truncated ||= wasTruncated;
   });
-  const [code] = (await once(child, 'close')) as [number | null];
+  const [code] = await new Promise<[number | null]>((resolve) => {
+    child.once('close', (exitCode) => resolve([exitCode]));
+  });
   if (timeout) clearTimeout(timeout);
   options.signal?.removeEventListener('abort', onAbort);
+  if (spawnError) stderr = `${stderr}${stderr ? '\n' : ''}${spawnError.message}`;
   return { code, stdout, stderr, timedOut, cancelled, truncated };
 }
 

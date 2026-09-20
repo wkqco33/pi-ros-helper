@@ -404,7 +404,13 @@ export default function (pi: ExtensionAPI) {
     async execute(_id, params, signal, _update, ctx) {
       const started = Date.now();
       try {
-        const data = await diagnoseTf(ctx.cwd, params.source, params.target, signal);
+        const data = await diagnoseTf(
+          ctx.cwd,
+          params.source,
+          params.target,
+          signal,
+          (params.timeoutSeconds ?? 3) * 1000,
+        );
         return text(
           result(ctx.cwd, started, {
             ok: data.available,

@@ -7,12 +7,32 @@ export interface EndpointQos {
   history?: string;
   depth?: number;
 }
+export type QosCompatibility = 'unknown' | 'compatible' | 'potential_mismatch';
+
+/** Apply ROS 2 requested/offered rules for the reliability and durability policies. */
+export function qosCompatibility(
+  publisher?: string,
+  subscriber?: string,
+  policy: 'reliability' | 'durability' = 'reliability',
+): QosCompatibility {
+  if (!publisher || !subscriber) return 'unknown';
+  const offered = publisher.toUpperCase();
+  const requested = subscriber.toUpperCase();
+  if (policy === 'reliability')
+    return requested === 'RELIABLE' && offered === 'BEST_EFFORT'
+      ? 'potential_mismatch'
+      : 'compatible';
+  return requested === 'TRANSIENT_LOCAL' && offered === 'VOLATILE'
+    ? 'potential_mismatch'
+    : 'compatible';
+}
+
 export interface QosReport {
   topic: string;
   type?: string;
   publishers: EndpointQos[];
   subscribers: EndpointQos[];
-  compatibility: 'unknown' | 'compatible' | 'potential_mismatch';
+  compatibility: QosCompatibility;
   notes: string[];
   raw: string;
 }
@@ -46,31 +66,42 @@ export async function inspectQos(
   const publishers = endpointBlocks(run.stdout, 'Publisher count:');
   const subscribers = endpointBlocks(run.stdout, 'Subscription count:');
   const notes: string[] = [];
+  let compatibility: QosCompatibility =
+    publishers.length && subscribers.length ? 'compatible' : 'unknown';
+  let sawUnknown = false;
   for (const publisher of publishers)
     for (const subscriber of subscribers) {
-      if (
-        publisher.reliability &&
-        subscriber.reliability &&
-        publisher.reliability !== subscriber.reliability
-      )
+      const reliability = qosCompatibility(
+        publisher.reliability,
+        subscriber.reliability,
+        'reliability',
+      );
+      const durability = qosCompatibility(
+        publisher.durability,
+        subscriber.durability,
+        'durability',
+      );
+      if (reliability === 'unknown' || durability === 'unknown') sawUnknown = true;
+      if (reliability === 'potential_mismatch') {
+        compatibility = 'potential_mismatch';
         notes.push(
-          `Reliability differs: publisher ${publisher.reliability}, subscriber ${subscriber.reliability}.`,
+          `Reliability is incompatible: publisher ${publisher.reliability}, subscriber ${subscriber.reliability}.`,
         );
-      if (
-        publisher.durability &&
-        subscriber.durability &&
-        publisher.durability !== subscriber.durability
-      )
+      }
+      if (durability === 'potential_mismatch') {
+        compatibility = 'potential_mismatch';
         notes.push(
-          `Durability differs: publisher ${publisher.durability}, subscriber ${subscriber.durability}.`,
+          `Durability is incompatible: publisher ${publisher.durability}, subscriber ${subscriber.durability}.`,
         );
+      }
     }
+  if (compatibility === 'compatible' && sawUnknown) compatibility = 'unknown';
   return {
     topic,
     type: run.stdout.match(/Type:\s*([^\n]+)/)?.[1]?.trim(),
     publishers,
     subscribers,
-    compatibility: notes.length ? 'potential_mismatch' : 'compatible',
+    compatibility,
     notes,
     raw: run.stdout,
   };

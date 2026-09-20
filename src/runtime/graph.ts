@@ -30,8 +30,10 @@ export async function snapshotGraph(cwd: string, signal?: AbortSignal): Promise<
     const match = line.match(/^(\S+)\s+\[([^\]]+)\]/);
     return { name: match?.[1] ?? line, types: match?.[2]?.split(/,\s*/) ?? [] };
   });
-  if (nodes.code !== 0 && topics.code !== 0 && services.code !== 0)
-    throw new Error(topics.stderr || nodes.stderr || services.stderr || 'ROS graph is unavailable');
+  if (nodes.code !== 0 || topics.code !== 0 || services.code !== 0)
+    throw new Error(
+      topics.stderr || nodes.stderr || services.stderr || 'ROS graph snapshot is incomplete',
+    );
   return {
     nodes: lines(nodes.stdout),
     topics: parsedTopics,

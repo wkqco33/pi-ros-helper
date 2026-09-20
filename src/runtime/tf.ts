@@ -13,11 +13,12 @@ export async function diagnoseTf(
   source: string,
   target: string,
   signal?: AbortSignal,
+  timeoutMs = 3000,
 ): Promise<TfReport> {
   const run = await runCommand('ros2', ['run', 'tf2_ros', 'tf2_echo', source, target], {
     cwd,
     signal,
-    timeoutMs: 3000,
+    timeoutMs: Math.max(1000, Math.min(timeoutMs, 15_000)),
     maxBytes: 20_000,
   });
   const output = `${run.stdout}\n${run.stderr}`.trim();

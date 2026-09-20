@@ -1,5 +1,5 @@
 const HIGH_RISK = [
-  /^\/cmd_vel(?:$|\/)/i,
+  /(?:^|\/)cmd_vel(?:$|\/)/i,
   /actuator/i,
   /motor/i,
   /joint_commands/i,
