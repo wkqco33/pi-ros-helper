@@ -7,7 +7,7 @@ const HIGH_RISK = [
   /shutdown/i,
 ];
 export function riskForTopic(topic: string): 'read' | 'actuation' {
-  return HIGH_RISK.some((pattern) => pattern.test(topic)) ? 'actuation' : 'actuation';
+  return HIGH_RISK.some((pattern) => pattern.test(topic)) ? 'actuation' : 'read';
 }
 export function isHighRiskTopic(topic: string): boolean {
   return HIGH_RISK.some((pattern) => pattern.test(topic));

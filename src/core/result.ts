@@ -1,3 +1,5 @@
+import { TOOL_VERSION } from './version.ts';
+
 export type DiagnosticSeverity = 'info' | 'warning' | 'error';
 
 export interface Diagnostic {
@@ -54,7 +56,7 @@ export function result<T>(
   return {
     ...value,
     metadata: {
-      toolVersion: '0.1.0',
+      toolVersion: TOOL_VERSION,
       cwd,
       durationMs: Date.now() - startedAt,
       truncated: value.truncated ?? false,

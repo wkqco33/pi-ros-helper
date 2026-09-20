@@ -2,7 +2,7 @@ import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { Type } from 'typebox';
 import { detectEnvironment } from '../src/environment/discovery.ts';
 import { inspectWorkspace } from '../src/workspace/inspect.ts';
-import { analyzePackage } from '../src/package/analyze.ts';
+import { analyzePackage, resolvePackage } from '../src/package/analyze.ts';
 import { failure, result } from '../src/core/result.ts';
 import { runCommand } from '../src/core/runner.ts';
 import { classifyColconOutput, readTestResults } from '../src/build/colcon.ts';
@@ -159,11 +159,7 @@ export default function (pi: ExtensionAPI) {
     }),
     async execute(_id, params, _signal, _update, ctx) {
       const started = Date.now();
-      const workspace = await inspectWorkspace(ctx.cwd);
-      const pkg =
-        workspace.packages.find(
-          (candidate) => candidate.name === params.package || candidate.path === params.package,
-        ) ?? (params.package ? undefined : workspace.packages[0]);
+      const pkg = await resolvePackage(ctx.cwd, params.package);
       if (!pkg)
         return text(
           failure(
@@ -311,7 +307,7 @@ export default function (pi: ExtensionAPI) {
       const data = diffParameters(params.left, params.right);
       return text(
         result(ctx.cwd, started, {
-          ok: data.length === 0,
+          ok: true,
           summary: data.length
             ? `${data.length} parameter difference(s) found.`
             : 'Parameter sets are identical.',

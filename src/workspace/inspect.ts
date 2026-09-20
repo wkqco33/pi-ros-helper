@@ -1,5 +1,6 @@
 import { readFile, readdir, stat } from 'node:fs/promises';
-import { join, relative } from 'node:path';
+import type { Dirent } from 'node:fs';
+import { basename, join } from 'node:path';
 import { findWorkspace } from '../environment/discovery.ts';
 
 export interface PackageInfo {
@@ -33,24 +34,48 @@ function tag(xml: string, name: string): string | undefined {
   return match?.[1]?.trim();
 }
 
+/**
+ * Read a package manifest from a directory. Returns undefined when the
+ * directory holds no `package.xml`, so callers can treat the result as a probe.
+ */
+export async function readPackageDir(
+  dir: string,
+  entries?: Dirent[],
+): Promise<PackageInfo | undefined> {
+  const manifest = join(dir, 'package.xml');
+  let xml: string;
+  try {
+    xml = await readFile(manifest, 'utf8');
+  } catch {
+    return undefined;
+  }
+  let files = entries;
+  if (!files) {
+    try {
+      files = await readdir(dir, { withFileTypes: true });
+    } catch {
+      files = [];
+    }
+  }
+  const hasCmake = files.some((entry) => entry.isFile() && entry.name === 'CMakeLists.txt');
+  const hasPython = files.some(
+    (entry) => entry.isFile() && ['setup.py', 'setup.cfg', 'pyproject.toml'].includes(entry.name),
+  );
+  return {
+    name: tag(xml, 'name') ?? basename(dir),
+    path: dir,
+    buildType: hasCmake ? 'ament_cmake' : hasPython ? 'ament_python' : 'unknown',
+    version: tag(xml, 'version'),
+    hasPackageXml: true,
+  };
+}
+
 async function scan(dir: string, packages: PackageInfo[]): Promise<void> {
   if (!(await isDir(dir))) return;
   const entries = await readdir(dir, { withFileTypes: true });
-  const manifest = entries.find((entry) => entry.isFile() && entry.name === 'package.xml');
-  if (manifest) {
-    const path = join(dir, 'package.xml');
-    const xml = await readFile(path, 'utf8');
-    const hasCmake = entries.some((entry) => entry.name === 'CMakeLists.txt');
-    const hasPython = entries.some((entry) =>
-      ['setup.py', 'setup.cfg', 'pyproject.toml'].includes(entry.name),
-    );
-    packages.push({
-      name: tag(xml, 'name') ?? relative(dir, path),
-      path: dir,
-      buildType: hasCmake ? 'ament_cmake' : hasPython ? 'ament_python' : 'unknown',
-      version: tag(xml, 'version'),
-      hasPackageXml: true,
-    });
+  const pkg = await readPackageDir(dir, entries);
+  if (pkg) {
+    packages.push(pkg);
     return;
   }
   for (const entry of entries) {
@@ -71,6 +96,10 @@ export async function inspectWorkspace(cwd: string): Promise<WorkspaceInfo> {
       duplicateNames: [],
     };
   const packages: PackageInfo[] = [];
+  // A single-package repository keeps its manifest at the workspace root
+  // instead of inside `src`, so probe the root before scanning `src`.
+  const rootPackage = await readPackageDir(root);
+  if (rootPackage) packages.push(rootPackage);
   await scan(join(root, 'src'), packages);
   const counts = new Map<string, number>();
   for (const pkg of packages) counts.set(pkg.name, (counts.get(pkg.name) ?? 0) + 1);

@@ -1,6 +1,6 @@
-import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
-import type { PackageInfo } from '../workspace/inspect.ts';
+import { readFile, stat } from 'node:fs/promises';
+import { dirname, join, resolve } from 'node:path';
+import { inspectWorkspace, readPackageDir, type PackageInfo } from '../workspace/inspect.ts';
 
 export interface PackageAnalysis {
   package: PackageInfo;
@@ -17,6 +17,49 @@ function tags(xml: string, names: string[]): string[] {
     }
   }
   return [...new Set(values)];
+}
+
+async function isFile(path: string): Promise<boolean> {
+  try {
+    return (await stat(path)).isFile();
+  } catch {
+    return false;
+  }
+}
+
+async function isDirectory(path: string): Promise<boolean> {
+  try {
+    return (await stat(path)).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+async function readPackageFromInput(cwd: string, input: string): Promise<PackageInfo | undefined> {
+  const candidate = resolve(cwd, input);
+  if (await isFile(candidate)) {
+    return candidate.endsWith('package.xml') ? readPackageDir(dirname(candidate)) : undefined;
+  }
+  return (await isDirectory(candidate)) ? readPackageDir(candidate) : undefined;
+}
+
+/**
+ * Resolve a package selector that may be an absolute path, a path relative to
+ * the working directory, a `package.xml` file, or a package name found in the
+ * active workspace. This keeps analysis usable in single-package repositories
+ * where the manifest lives at the workspace root.
+ */
+export async function resolvePackage(
+  cwd: string,
+  input?: string,
+): Promise<PackageInfo | undefined> {
+  if (input) {
+    const direct = await readPackageFromInput(cwd, input);
+    if (direct) return direct;
+  }
+  const workspace = await inspectWorkspace(cwd);
+  if (!input) return workspace.packages[0];
+  return workspace.packages.find((candidate) => candidate.name === input);
 }
 
 export async function analyzePackage(pkg: PackageInfo): Promise<PackageAnalysis> {

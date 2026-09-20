@@ -21,7 +21,9 @@ export function interfaceScaffold(input: InterfaceScaffoldInput) {
     input.kind === 'srv'
       ? `${body}\n---\n${body}`
       : input.kind === 'action'
-        ? `${body}\n---\n${body}\n---\n${body}`
+        ? // Only goal fields can be inferred from the supplied fields; result and
+          // feedback need a distinct contract from the caller.
+          `${body}\n---\n# result fields\n---\n# feedback fields`
         : body;
   return {
     files: { [`${input.packageName}/${suffix}/${input.name}.${suffix}`]: content },

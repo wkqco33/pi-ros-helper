@@ -7,11 +7,33 @@ export interface LogSummary {
   repeated: { message: string; count: number }[];
 }
 
+export type LogSeverity = 'error' | 'warning';
+
+const ROS_SEVERITY = /\[(FATAL|ERROR|WARN|WARNING|INFO|DEBUG)\]/i;
+
+/**
+ * Classify a log line by its ROS severity tag first and fall back to keywords,
+ * so a `[WARN]` line that merely mentions "error" is not reported as an error.
+ */
+export function classifyLogLine(line: string): LogSeverity | undefined {
+  const tagged = ROS_SEVERITY.exec(line);
+  if (tagged) {
+    const level = tagged[1].toUpperCase();
+    if (level === 'FATAL' || level === 'ERROR') return 'error';
+    if (level === 'WARN' || level === 'WARNING') return 'warning';
+    return undefined;
+  }
+  if (/\b(error|fatal|critical)\b/i.test(line)) return 'error';
+  if (/\bwarn(?:ing)?\b/i.test(line)) return 'warning';
+  return undefined;
+}
+
 export async function analyzeLog(path: string): Promise<LogSummary> {
   const source = await readFile(path, 'utf8');
   const all = source.split(/\r?\n/).filter(Boolean);
-  const errors = all.filter((line) => /\b(error|fatal|critical)\b/i.test(line)).slice(0, 50);
-  const warnings = all.filter((line) => /\bwarn(?:ing)?\b/i.test(line)).slice(0, 50);
+  const severity = all.map((line) => classifyLogLine(line));
+  const errors = all.filter((_, index) => severity[index] === 'error').slice(0, 50);
+  const warnings = all.filter((_, index) => severity[index] === 'warning').slice(0, 50);
   const counts = new Map<string, number>();
   for (const line of all) {
     const normalized = line
