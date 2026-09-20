@@ -2,6 +2,13 @@
 
 All notable changes are documented here.
 
+## [0.1.11] - 2026-09-20
+
+### Changed
+
+- Modularized `extensions/index.ts` by extracting all 34 tools into domain-specific modules under `src/tools/` and `src/commands/`.
+- Created `src/tools/index.ts` central tool aggregator providing `registerAllTools` and individual module registrars for independent testing and reuse.
+
 ## [0.1.10] - 2026-09-20
 
 ### Fixed

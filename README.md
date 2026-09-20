@@ -4,7 +4,7 @@
 
 ## 현재 지원 현황
 
-버전 `0.1.10`은 내장된 `ros2-development` 스킬에 정의된 범위 제한(bounded) 검사, 품질 게이트, 명시적 확인 기반 제어 도구를 제공합니다:
+버전 `0.1.11`은 내장된 `ros2-development` 스킬에 정의된 범위 제한(bounded) 검사, 품질 게이트, 명시적 확인 기반 제어 도구를 제공합니다:
 
 ### 정적 분석, 작업 공간 및 패키징 (Static Analysis, Workspace & Packaging)
 - `ros_environment` — ROS 배포판(distro), RMW, 도메인 ID, 환경 설정 파일 및 작업 공간 탐색 상태 검사
