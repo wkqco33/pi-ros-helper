@@ -1,5 +1,176 @@
-node_modules/
-__pycache__/
-coverage/
-*.log
+# =========================================================
+# OS / System files
+# =========================================================
+### Linux ###
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+### macOS ###
 .DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+*.icloud
+
+### Windows ###
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
+
+# =========================================================
+# Editors / IDEs
+# =========================================================
+### Visual Studio Code ###
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/*.code-snippets
+.history/
+*.vsix
+
+### JetBrains ###
+.idea/
+*.iml
+*.iws
+*.ipr
+
+### Others ###
+*.swp
+*.swo
+*~
+
+# =========================================================
+# Node.js / TypeScript
+# =========================================================
+# Dependency directories
+node_modules/
+jspm_packages/
+web_modules/
+bower_components/
+
+# Build output
+dist/
+build/
+out/
+lib-cov/
+*.tsbuildinfo
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.pnpm-debug.log*
+
+# Diagnostic reports
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Test / coverage output
+coverage/
+*.lcov
+.nyc_output/
+.vscode-test/
+
+# Caches
+.npm
+.eslintcache
+.stylelintcache
+.node_repl_history
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
+.cache
+.parcel-cache
+.webpack/
+.serverless/
+.fusebox/
+.dynamodb/
+.tern-port
+
+# Package manager artifacts
+*.tgz
+.yarn-integrity
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnp.*
+
+# Framework build outputs (kept for safety)
+.next
+.nuxt
+.svelte-kit
+.vuepress/dist
+.docusaurus
+.temp
+
+# =========================================================
+# Environment variables / secrets
+# =========================================================
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.*.local
+
+# =========================================================
+# Python (minimal — only a few helper scripts in this repo)
+# =========================================================
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# =========================================================
+# Project-specific
+# =========================================================
+# Local ROS 2 workspace / runtime artifacts produced by tooling
+.ros/
+ros2_ws/
+log/
+install/
+build/*/   # colcon build artifacts (kept out of VCS)
