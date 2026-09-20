@@ -14,6 +14,10 @@ import { isHighRiskTopic } from "../src/core/safety.ts";
 import { diagnoseTf } from "../src/runtime/tf.ts";
 import { inspectParameters, diffParameters } from "../src/runtime/params.ts";
 import { analyzeLog } from "../src/runtime/logs.ts";
+import { queryBag } from "../src/bag/query.ts";
+import { runConfirmedControl } from "../src/runtime/control.ts";
+import { join } from "node:path";
+import { scaffold } from "../src/generate/scaffold.ts";
 
 const text = (value: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(value, null, 2) }], details: value });
 
@@ -145,6 +149,58 @@ export default function (pi: ExtensionAPI) {
     async execute(_id, params, _signal, _update, ctx) {
       const started = Date.now();
       try { const data = await analyzeLog(params.path); return text(result(ctx.cwd, started, { ok: data.errors.length === 0, summary: `${data.lines} log line(s), ${data.errors.length} error(s), ${data.warnings.length} warning(s).`, data, evidence: [{ kind: "log_summary", path: params.path }], warnings: data.warnings.length ? [{ code: "LOG_WARNINGS", message: `${data.warnings.length} warning line(s) found.`, severity: "warning" as const }] : [], errors: [], suggestions: [] })); } catch (error) { return text(failure(ctx.cwd, started, error instanceof Error ? error.message : String(error), "OUTPUT_PARSE_FAILED")); }
+    },
+  });
+
+  pi.registerTool({
+    name: "ros_scaffold_preview",
+    label: "ROS Scaffold Preview",
+    description: "Generate a minimal ROS 2 node scaffold in memory for review; this tool does not write files.",
+    promptSnippet: "Preview a ROS 2 node scaffold",
+    parameters: Type.Object({ name: Type.String(), language: Type.Union([Type.Literal("python"), Type.Literal("cpp")]), kind: Type.Union([Type.Literal("publisher"), Type.Literal("subscriber")]) }),
+    async execute(_id, params, _signal, _update, ctx) {
+      const started = Date.now(); const data = scaffold(params);
+      return text(result(ctx.cwd, started, { ok: true, summary: `Generated an in-memory ${params.language} ${params.kind} scaffold.`, data, evidence: [{ kind: "scaffold_preview", name: params.name }], warnings: [{ code: "PREVIEW_ONLY", message: "No files were written.", severity: "info" as const }], errors: [], suggestions: [] }));
+    },
+  });
+
+  pi.registerTool({
+    name: "ros_bag_query",
+    label: "ROS Bag Query",
+    description: "Read bounded rosbag2 samples using rosbag2_py and report timestamps, serialized sizes, and gaps without replaying or modifying the bag.",
+    promptSnippet: "Query bounded rosbag2 samples",
+    parameters: Type.Object({ bagPath: Type.String(), topic: Type.Optional(Type.String()), limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 1000 })), gapNanoseconds: Type.Optional(Type.Integer({ minimum: 1 })) }),
+    async execute(_id, params, signal, _update, ctx) {
+      const started = Date.now();
+      try { const data = await queryBag(ctx.cwd, join(ctx.cwd, "helpers/bag_query.py"), params, signal); return text(result(ctx.cwd, started, { ok: true, summary: `Read bounded bag samples${params.topic ? ` for ${params.topic}` : ""}.`, data, evidence: [{ kind: "bag_query", bagPath: params.bagPath, topic: params.topic }], warnings: [], errors: [], suggestions: [] })); } catch (error) { return text(failure(ctx.cwd, started, error instanceof Error ? error.message : String(error), "COMMAND_FAILED")); }
+    },
+  });
+
+  pi.registerTool({
+    name: "ros_service_call",
+    label: "ROS Service Call",
+    description: "Preview or execute one ROS 2 service call. Execution requires explicit opt-in and interactive confirmation.",
+    promptSnippet: "Preview or confirm one ROS 2 service call",
+    parameters: Type.Object({ service: Type.String(), type: Type.String(), request: Type.String(), execute: Type.Optional(Type.Boolean()) }),
+    async execute(_id, params, signal, _update, ctx) {
+      const started = Date.now(); const command = { executable: "ros2", args: ["service", "call", params.service, params.type, params.request], cwd: ctx.cwd };
+      if (!params.execute) return text(result(ctx.cwd, started, { ok: true, summary: "Service call preview generated; no call was made.", evidence: [{ kind: "command_preview", ...command }], warnings: [{ code: "CONTROL_PREVIEW", message: "A service call may change robot state.", severity: "warning" as const }], errors: [], suggestions: [], commands: [command] }));
+      if (!ctx.hasUI || !(await ctx.ui.confirm("Confirm ROS service call", `${params.service} (${params.type})`))) return text(failure(ctx.cwd, started, "Service call cancelled or requires interactive confirmation.", "UNSAFE_OPERATION_DENIED", { commands: [command] }));
+      const run = await runConfirmedControl(command, signal); return text(result(ctx.cwd, started, { ok: run.code === 0, summary: run.code === 0 ? "Service call completed." : "Service call failed.", data: { stdout: run.stdout, stderr: run.stderr }, evidence: [{ kind: "service_call", service: params.service }], warnings: [], errors: run.code === 0 ? [] : [{ code: "SERVICE_CALL_FAILED", message: run.stderr || "Service call failed.", severity: "error" as const }], suggestions: [], commands: [command], truncated: run.truncated }));
+    },
+  });
+
+  pi.registerTool({
+    name: "ros_action_goal",
+    label: "ROS Action Goal",
+    description: "Preview or execute one ROS 2 action goal. Execution requires explicit opt-in and interactive confirmation.",
+    promptSnippet: "Preview or confirm one ROS 2 action goal",
+    parameters: Type.Object({ action: Type.String(), type: Type.String(), goal: Type.String(), execute: Type.Optional(Type.Boolean()) }),
+    async execute(_id, params, signal, _update, ctx) {
+      const started = Date.now(); const command = { executable: "ros2", args: ["action", "send_goal", params.action, params.type, params.goal], cwd: ctx.cwd };
+      if (!params.execute) return text(result(ctx.cwd, started, { ok: true, summary: "Action goal preview generated; no goal was sent.", evidence: [{ kind: "command_preview", ...command }], warnings: [{ code: "CONTROL_PREVIEW", message: "An action goal may move hardware or run for an extended time.", severity: "warning" as const }], errors: [], suggestions: [], commands: [command] }));
+      if (!ctx.hasUI || !(await ctx.ui.confirm("Confirm ROS action goal", `${params.action} (${params.type})`))) return text(failure(ctx.cwd, started, "Action goal cancelled or requires interactive confirmation.", "UNSAFE_OPERATION_DENIED", { commands: [command] }));
+      const run = await runConfirmedControl(command, signal); return text(result(ctx.cwd, started, { ok: run.code === 0, summary: run.code === 0 ? "Action goal completed." : "Action goal failed.", data: { stdout: run.stdout, stderr: run.stderr }, evidence: [{ kind: "action_goal", action: params.action }], warnings: [], errors: run.code === 0 ? [] : [{ code: "ACTION_GOAL_FAILED", message: run.stderr || "Action goal failed.", severity: "error" as const }], suggestions: [], commands: [command], truncated: run.truncated }));
     },
   });
 

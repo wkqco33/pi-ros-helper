@@ -7,6 +7,7 @@ export interface RunOptions {
   timeoutMs?: number;
   signal?: AbortSignal;
   maxBytes?: number;
+  stdin?: string;
 }
 
 export interface RunResult {
@@ -30,8 +31,11 @@ export async function runCommand(executable: string, args: string[], options: Ru
     cwd: options.cwd,
     env: { ...process.env, ...options.env },
     detached: process.platform !== "win32",
-    stdio: ["ignore", "pipe", "pipe"],
+    stdio: ["pipe", "pipe", "pipe"],
   });
+
+  if (options.stdin !== undefined) child.stdin.write(options.stdin);
+  child.stdin.end();
 
   let stdout = "";
   let stderr = "";
