@@ -23,7 +23,6 @@ import { queryBag } from '../src/bag/query.ts';
 import { runConfirmedControl } from '../src/runtime/control.ts';
 import { join, resolve, dirname } from 'node:path';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { withFileMutationQueue } from '@earendil-works/pi-coding-agent';
 import { scaffold } from '../src/generate/scaffold.ts';
 import { packageScaffold } from '../src/generate/package.ts';
 import { interfaceScaffold } from '../src/generate/interface.ts';
@@ -493,6 +492,10 @@ export default function (pi: ExtensionAPI) {
             ),
           );
         await mkdir(root, { recursive: true });
+        // Imported lazily: the pi host package reads `globSync` from `node:fs`,
+        // which only exists on Node 22+. Loading it eagerly would make the whole
+        // extension fail to load on Node 20.
+        const { withFileMutationQueue } = await import('@earendil-works/pi-coding-agent');
         for (const file of files)
           await withFileMutationQueue(file.path, async () => {
             try {
