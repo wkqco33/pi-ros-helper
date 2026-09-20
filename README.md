@@ -4,7 +4,7 @@ ROS 2 development tools for the [pi coding agent](https://github.com/badlogic/pi
 
 ## Current status
 
-Version `0.1.4` ships the bounded inspection and control tools documented by the bundled `ros2-development` skill, including:
+Version `0.1.5` ships the bounded inspection and control tools documented by the bundled `ros2-development` skill, including:
 
 - `ros_environment` — inspect ROS distro, RMW, domain, setup files, and workspace discovery
 - `ros_workspace_inspect` — enumerate packages and detect duplicate package names
