@@ -5,7 +5,12 @@ import { inspectWorkspace } from '../src/workspace/inspect.ts';
 import { analyzePackage, resolvePackage } from '../src/package/analyze.ts';
 import { failure, result } from '../src/core/result.ts';
 import { runCommand } from '../src/core/runner.ts';
-import { classifyColconOutput, readTestResults } from '../src/build/colcon.ts';
+import {
+  classifyColconOutput,
+  readTestResults,
+  summarizeBuildWarnings,
+  summarizeTestResults,
+} from '../src/build/colcon.ts';
 import { snapshotGraph, diffGraphs, type GraphSnapshot } from '../src/runtime/graph.ts';
 import { inspectQos } from '../src/runtime/qos.ts';
 import { analyzeLaunch } from '../src/launch/analyze.ts';
@@ -335,9 +340,12 @@ export default function (pi: ExtensionAPI) {
         return text(
           result(ctx.cwd, started, {
             ok: data.errors.length === 0,
-            summary: `${data.lines} log line(s), ${data.errors.length} error(s), ${data.warnings.length} warning(s).`,
+            summary: `${data.lines} log line(s), ${data.errors.length} error(s), ${data.warnings.length} warning(s), ${data.testFailures.length} failing test line(s).`,
             data,
-            evidence: [{ kind: 'log_summary', path: params.path }],
+            evidence: [
+              { kind: 'log_summary', path: params.path },
+              ...data.testFailures.map((line) => ({ kind: 'test_failure', message: line })),
+            ],
             warnings: data.warnings.length
               ? [
                   {
@@ -347,7 +355,15 @@ export default function (pi: ExtensionAPI) {
                   },
                 ]
               : [],
-            errors: [],
+            errors: data.testFailures.length
+              ? [
+                  {
+                    code: 'TEST_FAILURE',
+                    message: `${data.testFailures.length} failing test line(s) detected.`,
+                    severity: 'error' as const,
+                  },
+                ]
+              : [],
             suggestions: [],
           }),
         );
@@ -632,7 +648,11 @@ export default function (pi: ExtensionAPI) {
     parameters: Type.Object({
       name: Type.String(),
       language: Type.Union([Type.Literal('python'), Type.Literal('cpp')]),
-      kind: Type.Union([Type.Literal('publisher'), Type.Literal('subscriber')]),
+      kind: Type.Union([
+        Type.Literal('publisher'),
+        Type.Literal('subscriber'),
+        Type.Literal('node'),
+      ]),
     }),
     async execute(_id, params, _signal, _update, ctx) {
       const started = Date.now();
@@ -1315,10 +1335,22 @@ export default function (pi: ExtensionAPI) {
       const output = `${run.stdout}\n${run.stderr}`;
       const failures = classifyColconOutput(output);
       const testResults = await readTestResults(workspace.root);
+      const totals = summarizeTestResults(testResults);
+      const failingTests = testResults.flatMap((item) =>
+        item.cases.map((entry) => ({
+          package: item.package,
+          suite: entry.suite,
+          test: entry.name,
+          file: entry.file,
+          line: entry.line,
+          message: entry.message,
+        })),
+      );
       const failed =
         run.cancelled ||
         run.timedOut ||
         run.code !== 0 ||
+        totals.failures > 0 ||
         testResults.some((item) => item.failures > 0);
       return text(
         result(ctx.cwd, started, {
@@ -1328,16 +1360,27 @@ export default function (pi: ExtensionAPI) {
             : run.timedOut
               ? 'Tests timed out.'
               : failed
-                ? 'One or more ROS 2 tests failed.'
-                : 'ROS 2 tests completed successfully.',
+                ? `One or more ROS 2 tests failed (${totals.failures} case(s)).`
+                : `ROS 2 tests completed successfully (${totals.tests} test(s)).`,
           data: {
             exitCode: run.code,
+            testSummary: totals,
+            failingTests,
             testResults,
             failures,
             stdout: run.stdout,
             stderr: run.stderr,
           },
-          evidence: failures.map((item) => ({ kind: item.kind, message: item.message })),
+          evidence: [
+            ...failingTests.map((item) => ({
+              kind: 'test_failure',
+              message: `${item.package}: ${item.suite}.${item.test}`,
+              file: item.file,
+              line: item.line,
+              detail: item.message,
+            })),
+            ...failures.map((item) => ({ kind: item.kind, message: item.message })),
+          ],
           warnings: run.truncated
             ? [
                 {
@@ -1355,12 +1398,25 @@ export default function (pi: ExtensionAPI) {
                     : run.cancelled
                       ? 'COMMAND_CANCELLED'
                       : 'TEST_FAILED',
-                  message: 'colcon test did not complete successfully.',
+                  message:
+                    failingTests.length > 0
+                      ? `Failing test case(s): ${failingTests
+                          .map((item) => `${item.suite}.${item.test}`)
+                          .join(', ')}`
+                      : 'colcon test did not complete successfully.',
                   severity: 'error' as const,
                 },
               ]
             : [],
-          suggestions: [],
+          suggestions: failingTests.length
+            ? [
+                {
+                  message:
+                    'Inspect the reported test case first, then rerun only the failing binary with --output-on-failure.',
+                  confidence: 'high' as const,
+                },
+              ]
+            : [],
           commands: [command],
           truncated: run.truncated,
         }),
@@ -1423,6 +1479,9 @@ export default function (pi: ExtensionAPI) {
       });
       const output = `${run.stdout}\n${run.stderr}`.trim();
       const failed = run.cancelled || run.timedOut || run.code !== 0;
+      const failures = classifyColconOutput(output);
+      const warnings = summarizeBuildWarnings(output);
+      const warningCount = warnings.reduce((total, entry) => total + entry.count, 0);
       return text(
         result(ctx.cwd, started, {
           ok: !failed,
@@ -1431,19 +1490,49 @@ export default function (pi: ExtensionAPI) {
             : run.timedOut
               ? 'Build timed out.'
               : failed
-                ? 'colcon build failed.'
-                : 'colcon build completed successfully.',
-          data: { exitCode: run.code, stdout: run.stdout, stderr: run.stderr },
-          evidence: [{ kind: 'build_output', output }],
-          warnings: run.truncated
-            ? [
-                {
-                  code: 'OUTPUT_TRUNCATED',
-                  message: 'Build output was truncated to protect context size.',
-                  severity: 'warning' as const,
-                },
-              ]
-            : [],
+                ? `colcon build failed (${failures.length} classified failure(s)).`
+                : `colcon build completed successfully (${warningCount} warning(s)).`,
+          data: {
+            exitCode: run.code,
+            warningCount,
+            warnings,
+            failures,
+            stdout: run.stdout,
+            stderr: run.stderr,
+          },
+          evidence: [
+            {
+              kind: 'build_output',
+              warningCount,
+              warnings: warnings.map((entry) => ({
+                file: entry.file,
+                message: entry.message,
+                flag: entry.flag,
+                count: entry.count,
+              })),
+            },
+            ...failures.map((item) => ({ kind: item.kind, message: item.message })),
+          ],
+          warnings: [
+            ...(run.truncated
+              ? [
+                  {
+                    code: 'OUTPUT_TRUNCATED',
+                    message: 'Build output was truncated to protect context size.',
+                    severity: 'warning' as const,
+                  },
+                ]
+              : []),
+            ...(warningCount > 0
+              ? [
+                  {
+                    code: 'BUILD_WARNINGS',
+                    message: `${warningCount} compiler warning(s) across ${warnings.length} site(s).`,
+                    severity: 'warning' as const,
+                  },
+                ]
+              : []),
+          ],
           errors: failed
             ? [
                 {

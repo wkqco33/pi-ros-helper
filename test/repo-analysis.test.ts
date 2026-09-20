@@ -237,6 +237,57 @@ test('analyzeLog keeps warnings out of the error list', async () => {
   );
 });
 
+test('test framework failure lines are classified as errors', () => {
+  assert.equal(
+    classifyLogLine('1/1 Test #25: test_rate_limiter ................***Failed    0.17 sec'),
+    'error',
+  );
+  assert.equal(classifyLogLine('[  FAILED  ] RateLimiterTest.IsolatesRateLimitsPerKey'), 'error');
+  assert.equal(classifyLogLine('CMake Error at CMakeLists.txt:10 (add_library):'), 'error');
+  assert.equal(
+    classifyLogLine('FAILED test/test_gateway.py::test_health - AssertionError: boom'),
+    'error',
+  );
+  assert.equal(classifyLogLine('The following tests FAILED:'), 'error');
+  assert.equal(classifyLogLine('0% tests passed, 1 tests failed out of 1'), 'error');
+  assert.equal(classifyLogLine('100% tests passed, 0 tests failed out of 44'), undefined);
+  assert.equal(
+    classifyLogLine('[       OK ] RateLimiterTest.EnforcesBurstCapacityAndRateLimiting (120 ms)'),
+    undefined,
+  );
+});
+
+test('analyzeLog surfaces failing test names separately from generic errors', async () => {
+  await withFixture(
+    {
+      'run.log':
+        '[==========] Running 2 tests from 1 test suite.\n[  FAILED  ] RateLimiterTest.IsolatesRateLimitsPerKey\n[  FAILED  ] 1 test, listed below:\n',
+    },
+    async (dir) => {
+      const summary = await analyzeLog(join(dir, 'run.log'));
+      assert.ok(summary.errors.length > 0);
+      assert.ok(
+        summary.testFailures.some((line) => line.includes('IsolatesRateLimitsPerKey')),
+        'expected the failing test name to be reported',
+      );
+    },
+  );
+});
+
+test('node scaffold declares a parameter and drives a timer', () => {
+  const cpp = scaffold({ name: 'telemetry_node', language: 'cpp', kind: 'node' });
+  const cppCode = cpp.files['telemetry_node/src/telemetry_node.cpp'] ?? '';
+  assert.match(cppCode, /declare_parameter/);
+  assert.match(cppCode, /create_wall_timer/);
+  assert.doesNotMatch(cppCode, /create_publisher/);
+
+  const python = scaffold({ name: 'telemetry_node', language: 'python', kind: 'node' });
+  const pythonCode = python.files['telemetry_node/telemetry_node.py'] ?? '';
+  assert.match(pythonCode, /declare_parameter/);
+  assert.match(pythonCode, /create_timer/);
+  assert.doesNotMatch(pythonCode, /create_publisher/);
+});
+
 test('action interface preview keeps supplied fields in the goal section', () => {
   const generated = interfaceScaffold({
     packageName: 'demo_pkg',

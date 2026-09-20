@@ -1,7 +1,7 @@
 export interface ScaffoldInput {
   name: string;
   language: 'python' | 'cpp';
-  kind: 'publisher' | 'subscriber';
+  kind: 'publisher' | 'subscriber' | 'node';
 }
 
 function className(name: string): string {
@@ -133,24 +133,87 @@ function pythonSubscriber(name: string, type: string): string {
   ].join('\n');
 }
 
+function cppNode(name: string, type: string): string {
+  return [
+    '#include <chrono>',
+    '#include <memory>',
+    '',
+    '#include <rclcpp/rclcpp.hpp>',
+    '',
+    `class ${type} final : public rclcpp::Node {`,
+    'public:',
+    `  ${type}() : Node("${name}") {`,
+    '    rate_hz_ = declare_parameter<double>("rate_hz", 1.0);',
+    '    timer_ = create_wall_timer(',
+    '        std::chrono::duration<double>(1.0 / rate_hz_), [this]() { on_tick(); });',
+    `    RCLCPP_INFO(get_logger(), "${name} started");`,
+    '  }',
+    '',
+    'private:',
+    '  void on_tick() { RCLCPP_DEBUG(get_logger(), "tick"); }',
+    '',
+    '  double rate_hz_{1.0};',
+    '  rclcpp::TimerBase::SharedPtr timer_;',
+    '};',
+    '',
+    'int main(int argc, char ** argv) {',
+    '  rclcpp::init(argc, argv);',
+    `  rclcpp::spin(std::make_shared<${type}>());`,
+    '  rclcpp::shutdown();',
+    '  return 0;',
+    '}',
+    '',
+  ].join('\n');
+}
+
+function pythonNode(name: string, type: string): string {
+  return [
+    '#!/usr/bin/env python3',
+    'import rclpy',
+    'from rclpy.node import Node',
+    '',
+    '',
+    `class ${type}(Node):`,
+    '    def __init__(self):',
+    `        super().__init__("${name}")`,
+    '        self.rate_hz = self.declare_parameter("rate_hz", 1.0).value',
+    '        self.timer_ = self.create_timer(1.0 / self.rate_hz, self.on_tick)',
+    `        self.get_logger().info("${name} started")`,
+    '',
+    '    def on_tick(self):',
+    '        self.get_logger().debug("tick")',
+    '',
+    '',
+    'def main():',
+    '    rclpy.init()',
+    `    node = ${type}()`,
+    '    rclpy.spin(node)',
+    '    node.destroy_node()',
+    '    rclpy.shutdown()',
+    '',
+    '',
+    'if __name__ == "__main__":',
+    '    main()',
+    '',
+  ].join('\n');
+}
+
 export function scaffold(input: ScaffoldInput) {
   const type = className(input.name);
   if (input.language === 'python') {
-    return {
-      files: {
-        [`${input.name}/${input.name}.py`]:
-          input.kind === 'publisher'
-            ? pythonPublisher(input.name, type)
-            : pythonSubscriber(input.name, type),
-      },
-    };
+    const content =
+      input.kind === 'publisher'
+        ? pythonPublisher(input.name, type)
+        : input.kind === 'subscriber'
+          ? pythonSubscriber(input.name, type)
+          : pythonNode(input.name, type);
+    return { files: { [`${input.name}/${input.name}.py`]: content } };
   }
-  return {
-    files: {
-      [`${input.name}/src/${input.name}.cpp`]:
-        input.kind === 'publisher'
-          ? cppPublisher(input.name, type)
-          : cppSubscriber(input.name, type),
-    },
-  };
+  const content =
+    input.kind === 'publisher'
+      ? cppPublisher(input.name, type)
+      : input.kind === 'subscriber'
+        ? cppSubscriber(input.name, type)
+        : cppNode(input.name, type);
+  return { files: { [`${input.name}/src/${input.name}.cpp`]: content } };
 }
