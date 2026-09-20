@@ -30,8 +30,8 @@
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test test/**/*.test.ts",
-    "test:coverage": "tsx --test --experimental-test-coverage test/**/*.test.ts",
+    "test": "tsx --test test/*.test.ts",
+    "test:coverage": "tsx --test --experimental-test-coverage test/*.test.ts",
     "format": "prettier --write \"extensions/**/*.ts\" \"src/**/*.ts\" \"test/**/*.ts\"",
     "format:check": "prettier --check \"extensions/**/*.ts\" \"src/**/*.ts\" \"test/**/*.ts\"",
     "pack-check": "npm pack --dry-run",
