@@ -66,7 +66,8 @@ export function classifyColconOutput(output: string): ColconFailure[] {
     const line = raw.trim();
     if (!line) continue;
     let kind: ColconFailureKind | undefined;
-    if (
+    if (/EXPECT_(?:THAT|EQ|TRUE)|HasSubstr|ASSERT_(?:THAT|EQ|TRUE)/.test(line)) kind = 'test';
+    else if (
       /fatal error:|\berror:/.test(line) &&
       (SOURCE_EXTENSION.test(line) || DIAGNOSTIC_LOCATION.test(line))
     )

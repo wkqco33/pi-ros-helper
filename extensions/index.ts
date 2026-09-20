@@ -12,7 +12,7 @@ import {
   summarizeTestResults,
 } from '../src/build/colcon.ts';
 import { diagnoseColconFailure } from '../src/build/failure.ts';
-import { selectTests } from '../src/build/selection.ts';
+import { ctestRegex, selectTests } from '../src/build/selection.ts';
 import { planDependencies } from '../src/package/dependency-plan.ts';
 import { summarizeValidation } from '../src/validation/bundle.ts';
 import { buildCompletionEvidence } from '../src/validation/evidence.ts';
@@ -1962,6 +1962,7 @@ export default function (pi: ExtensionAPI) {
     ],
     parameters: Type.Object({
       packages: Type.Optional(Type.Array(Type.String())),
+      testTargets: Type.Optional(Type.Array(Type.String(), { maxItems: 500 })),
       execute: Type.Optional(Type.Boolean()),
       timeoutSeconds: Type.Optional(Type.Integer({ minimum: 1, maximum: 3600 })),
     }),
@@ -1974,6 +1975,8 @@ export default function (pi: ExtensionAPI) {
         );
       const args = ['test'];
       if (params.packages?.length) args.push('--packages-select', ...params.packages);
+      if (params.testTargets?.length)
+        args.push('--ctest-args', '-R', ctestRegex(params.testTargets));
       const command = { executable: 'colcon', args, cwd: workspace.root };
       if (!params.execute)
         return text(

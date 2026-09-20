@@ -23,6 +23,7 @@ function unique(values: string[]): string[] {
 }
 
 export function planDependencies(input: {
+  packageName?: string;
   packageXml: string;
   source: string;
   build: string;
@@ -34,15 +35,16 @@ export function planDependencies(input: {
       ),
     ].map((match) => match[1]!.trim()),
   );
-  const includes = [...input.source.matchAll(/#include\s*[<"]([A-Za-z0-9_]+)\//g)].map(
-    (match) => match[1]!,
-  );
+  const includes = [...input.source.matchAll(/#include\s*[<"]([A-Za-z0-9_]+)\//g)]
+    .map((match) => ROS_HEADER_PACKAGE[match[1]!])
+    .filter((name): name is string => Boolean(name));
   const findPackages = [...input.build.matchAll(/find_package\s*\(\s*([A-Za-z0-9_]+)/g)].map(
     (match) => match[1]!,
   );
+  const ignoredBuildPackages = new Set(['ament_cmake', input.packageName ?? '']);
   const referenced = unique([
-    ...includes.map((name) => ROS_HEADER_PACKAGE[name] ?? name),
-    ...findPackages,
+    ...includes,
+    ...findPackages.filter((name) => !ignoredBuildPackages.has(name)),
   ]);
   const missing = referenced.filter((name) => !declared.includes(name));
   const actions = missing.flatMap((name) => [

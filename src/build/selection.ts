@@ -9,6 +9,10 @@ function tokens(value: string): string[] {
 }
 
 /** Select test targets whose names overlap the changed source/test concepts. */
+export function ctestRegex(testTargets: string[]): string {
+  return testTargets.map((target) => target.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+}
+
 export function selectTests(changedPaths: string[], testTargets: string[]): string[] {
   const concepts = new Set(changedPaths.flatMap(tokens));
   return testTargets.filter((target) => {

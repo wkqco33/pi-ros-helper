@@ -19,7 +19,10 @@ const suggestions: Record<ColconFailureKind, string[]> = {
   ],
   rosidl: ['Verify interface definitions and rosidl_generate_interfaces dependencies.'],
   python: ['Verify the Python dependency and the sourced ROS environment.'],
-  test: ['Run the failing test target directly after rebuilding the affected package.'],
+  test: [
+    'Run the failing test target directly after rebuilding the affected package.',
+    'If this is a gtest matcher error, include the appropriate gtest matcher header or use a standard assertion.',
+  ],
   unknown: ['Inspect the first failure line and rerun with focused output.'],
 };
 

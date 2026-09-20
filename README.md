@@ -20,6 +20,7 @@
 - `ros_build` — 제한된(bounded) `colcon build` 미리보기 또는 명시적 실행; 파일, 플래그, 빈도별 컴파일러 경고 요약
 - `ros_test` — `colcon test` 미리보기 또는 명시적 실행; 실패한 테스트 케이스를 바이너리, 스위트, 소스 파일, 라인 번호 단위로 추적하며 테스트 바이너리가 소스보다 오래된 경우 경고(`STALE_TEST_ARTIFACTS`) 발생
 - `ros_test_select` — 테스트를 직접 실행하지 않고 변경된 소스 경로와 연관된 집중 테스트 대상 선별
+- `ros_test` — 선택된 `testTargets`를 안전하게 이스케이프한 CTest 정규식으로 집중 실행 지원
 - `ros_failure_diagnose` — 첫 번째 실행 가능한 colcon/컴파일러/CMake/rosidl 실패 원인을 분류하고 맞춤형 해결 가이드 제시
 - `ros_log_analyze` — ROS 데몬, colcon 빌드, 테스트 로그에서 오류, 경고 및 실패한 테스트 케이스 요약
 

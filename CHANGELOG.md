@@ -2,6 +2,14 @@
 
 All notable changes are documented here.
 
+## [Unreleased]
+
+### Improved
+
+- `ros_test` accepts selected test targets and passes a safely escaped CTest filter for focused execution.
+- Colcon diagnostics recognize common gtest matcher errors as test-tooling failures with more relevant suggestions.
+- Dependency planning ignores generated/system/gtest/gRPC includes and package-local/ament build references to reduce false positives.
+
 ## [0.1.8] - 2026-09-20
 
 ### Added
