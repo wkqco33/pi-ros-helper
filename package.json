@@ -1,6 +1,6 @@
 {
   "name": "pi-ros-helper",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "ROS 2 development tools for the pi coding agent",
   "type": "module",
   "keywords": [
