@@ -37,4 +37,9 @@ The extension does not require ROS to be installed in order to load. ROS-specifi
 - no shell interpolation of user-provided package names or paths
 - read-only diagnostics by default
 - explicit opt-in for build execution
+- topic publishing is bounded to one message and requires interactive confirmation
 - Humble and Jazzy as the initial compatibility targets
+
+## Runtime tools
+
+The extension also includes bounded graph snapshots/diffs, QoS inspection, static launch analysis, rosbag metadata inspection, and one-shot topic sampling. Runtime introspection reports an actionable error when the ROS CLI or daemon is unavailable.
