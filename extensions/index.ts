@@ -5,6 +5,7 @@ import { inspectWorkspace } from "../src/workspace/inspect.ts";
 import { analyzePackage } from "../src/package/analyze.ts";
 import { failure, result } from "../src/core/result.ts";
 import { runCommand } from "../src/core/runner.ts";
+import { classifyColconOutput, readTestResults } from "../src/build/colcon.ts";
 
 const text = (value: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(value, null, 2) }], details: value });
 
@@ -88,6 +89,30 @@ export default function (pi: ExtensionAPI) {
       } catch (error) {
         return text(failure(ctx.cwd, started, error instanceof Error ? error.message : String(error), "OUTPUT_PARSE_FAILED"));
       }
+    },
+  });
+
+  pi.registerTool({
+    name: "ros_test",
+    label: "ROS Test",
+    description: "Preview or run bounded colcon test and summarize JUnit results and likely failures.",
+    promptSnippet: "Preview or run ROS 2 tests and summarize failures",
+    promptGuidelines: ["Use ros_test with execute false first; inspect the first failure before rerunning selected tests."],
+    parameters: Type.Object({ packages: Type.Optional(Type.Array(Type.String())), execute: Type.Optional(Type.Boolean()), timeoutSeconds: Type.Optional(Type.Integer({ minimum: 1, maximum: 3600 })) }),
+    async execute(_id, params, signal, _update, ctx) {
+      const started = Date.now();
+      const workspace = await inspectWorkspace(ctx.cwd);
+      if (!workspace.root) return text(failure(ctx.cwd, started, "No ROS 2 workspace was found.", "WORKSPACE_NOT_FOUND"));
+      const args = ["test"];
+      if (params.packages?.length) args.push("--packages-select", ...params.packages);
+      const command = { executable: "colcon", args, cwd: workspace.root };
+      if (!params.execute) return text(result(ctx.cwd, started, { ok: true, summary: "Test command preview generated; no command was executed.", evidence: [{ kind: "command_preview", ...command }], warnings: [], errors: [], suggestions: [{ message: "Set execute=true after reviewing the command.", confidence: "high" }], commands: [command] }));
+      const run = await runCommand(command.executable, command.args, { cwd: command.cwd, signal, timeoutMs: (params.timeoutSeconds ?? 900) * 1000 });
+      const output = `${run.stdout}\n${run.stderr}`;
+      const failures = classifyColconOutput(output);
+      const testResults = await readTestResults(workspace.root);
+      const failed = run.cancelled || run.timedOut || run.code !== 0 || testResults.some((item) => item.failures > 0);
+      return text(result(ctx.cwd, started, { ok: !failed, summary: run.cancelled ? "Tests cancelled." : run.timedOut ? "Tests timed out." : failed ? "One or more ROS 2 tests failed." : "ROS 2 tests completed successfully.", data: { exitCode: run.code, testResults, failures, stdout: run.stdout, stderr: run.stderr }, evidence: failures.map((item) => ({ kind: item.kind, message: item.message })), warnings: run.truncated ? [{ code: "OUTPUT_TRUNCATED", message: "Test output was truncated.", severity: "warning" as const }] : [], errors: failed ? [{ code: run.timedOut ? "COMMAND_TIMEOUT" : run.cancelled ? "COMMAND_CANCELLED" : "TEST_FAILED", message: "colcon test did not complete successfully.", severity: "error" as const }] : [], suggestions: [], commands: [command], truncated: run.truncated }));
     },
   });
 
