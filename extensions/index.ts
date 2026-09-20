@@ -8,6 +8,9 @@ import { runCommand } from "../src/core/runner.ts";
 import { classifyColconOutput, readTestResults } from "../src/build/colcon.ts";
 import { snapshotGraph, diffGraphs, type GraphSnapshot } from "../src/runtime/graph.ts";
 import { inspectQos } from "../src/runtime/qos.ts";
+import { analyzeLaunch } from "../src/launch/analyze.ts";
+import { inspectBag } from "../src/bag/info.ts";
+import { isHighRiskTopic } from "../src/core/safety.ts";
 
 const text = (value: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(value, null, 2) }], details: value });
 
@@ -91,6 +94,64 @@ export default function (pi: ExtensionAPI) {
       } catch (error) {
         return text(failure(ctx.cwd, started, error instanceof Error ? error.message : String(error), "OUTPUT_PARSE_FAILED"));
       }
+    },
+  });
+
+  pi.registerTool({
+    name: "ros_topic_sample",
+    label: "ROS Topic Sample",
+    description: "Capture one bounded sample from a ROS 2 topic. Never starts an unbounded echo.",
+    promptSnippet: "Capture a bounded ROS 2 topic sample",
+    parameters: Type.Object({ topic: Type.String(), timeoutSeconds: Type.Optional(Type.Integer({ minimum: 1, maximum: 30 })) }),
+    async execute(_id, params, signal, _update, ctx) {
+      const started = Date.now();
+      const run = await runCommand("ros2", ["topic", "echo", "--once", params.topic], { cwd: ctx.cwd, signal, timeoutMs: (params.timeoutSeconds ?? 5) * 1000, maxBytes: 50_000 });
+      const failed = run.code !== 0 || run.timedOut || run.cancelled;
+      return text(result(ctx.cwd, started, { ok: !failed, summary: run.cancelled ? "Topic sample cancelled." : run.timedOut ? "No topic sample arrived before timeout." : failed ? `Unable to sample ${params.topic}.` : `Captured one sample from ${params.topic}.`, data: { topic: params.topic, output: run.stdout, stderr: run.stderr }, evidence: [{ kind: "topic_sample", topic: params.topic }], warnings: run.truncated ? [{ code: "OUTPUT_TRUNCATED", message: "Topic sample was truncated.", severity: "warning" as const }] : [], errors: failed ? [{ code: run.timedOut ? "COMMAND_TIMEOUT" : "TOPIC_SAMPLE_FAILED", message: run.stderr || "Topic sample failed.", severity: "error" as const }] : [], suggestions: [], truncated: run.truncated }));
+    },
+  });
+
+  pi.registerTool({
+    name: "ros_topic_publish",
+    label: "ROS Topic Publish",
+    description: "Preview or perform one bounded ROS 2 topic publish. Requires explicit execute=true and interactive confirmation; repeated publishing is not supported.",
+    promptSnippet: "Preview or explicitly confirm one ROS 2 topic publish",
+    parameters: Type.Object({ topic: Type.String(), type: Type.String(), message: Type.String(), execute: Type.Optional(Type.Boolean()) }),
+    async execute(_id, params, signal, _update, ctx) {
+      const started = Date.now();
+      const command = { executable: "ros2", args: ["topic", "pub", "--once", params.topic, params.type, params.message], cwd: ctx.cwd };
+      if (!params.execute) return text(result(ctx.cwd, started, { ok: true, summary: "Publish command preview generated; no message was sent.", evidence: [{ kind: "command_preview", ...command, highRisk: isHighRiskTopic(params.topic) }], warnings: [{ code: "ACTUATION_PREVIEW", message: "Publishing can affect a running robot.", severity: "warning" as const }], errors: [], suggestions: [{ message: "Set execute=true only after reviewing topic, type, and payload.", confidence: "high" }], commands: [command] }));
+      if (!ctx.hasUI) return text(failure(ctx.cwd, started, "Interactive confirmation is required for topic publishing.", "UNSAFE_OPERATION_DENIED", { commands: [command] }));
+      const confirmed = await ctx.ui.confirm("Confirm ROS topic publish", `${params.topic} (${params.type})\nOne message will be published. This may affect hardware.`);
+      if (!confirmed) return text(failure(ctx.cwd, started, "Topic publish cancelled by user.", "UNSAFE_OPERATION_DENIED", { commands: [command] }));
+      const run = await runCommand(command.executable, command.args, { cwd: ctx.cwd, signal, timeoutMs: 10000, maxBytes: 10000 });
+      return text(result(ctx.cwd, started, { ok: run.code === 0, summary: run.code === 0 ? "One ROS topic message was published." : "ROS topic publish failed.", data: { stdout: run.stdout, stderr: run.stderr }, evidence: [{ kind: "topic_publish", topic: params.topic, highRisk: isHighRiskTopic(params.topic) }], warnings: [], errors: run.code === 0 ? [] : [{ code: "PUBLISH_FAILED", message: run.stderr || "Publish command failed.", severity: "error" as const }], suggestions: [], commands: [command], truncated: run.truncated }));
+    },
+  });
+
+  pi.registerTool({
+    name: "ros_launch_analyze",
+    label: "ROS Launch Analyze",
+    description: "Statically analyze a ROS 2 launch file without executing it.",
+    promptSnippet: "Analyze ROS 2 launch structure",
+    parameters: Type.Object({ path: Type.String() }),
+    async execute(_id, params, _signal, _update, ctx) {
+      const started = Date.now();
+      try { const data = await analyzeLaunch(params.path); return text(result(ctx.cwd, started, { ok: true, summary: `Launch analysis found ${data.nodes.length} node reference(s).`, data, evidence: [{ kind: "launch_static_analysis", path: params.path }], warnings: data.warnings.map((message) => ({ message, severity: "warning" as const })), errors: [], suggestions: [] })); }
+      catch (error) { return text(failure(ctx.cwd, started, error instanceof Error ? error.message : String(error), "OUTPUT_PARSE_FAILED")); }
+    },
+  });
+
+  pi.registerTool({
+    name: "ros_bag_inspect",
+    label: "ROS Bag Inspect",
+    description: "Read bounded rosbag2 metadata using ros2 bag info; does not replay or modify the bag.",
+    promptSnippet: "Inspect rosbag2 metadata and topics",
+    parameters: Type.Object({ path: Type.String() }),
+    async execute(_id, params, signal, _update, ctx) {
+      const started = Date.now();
+      try { const data = await inspectBag(ctx.cwd, params.path, signal); return text(result(ctx.cwd, started, { ok: true, summary: `Bag contains ${data.topics.length} topic metadata record(s).`, data, evidence: [{ kind: "bag_metadata", path: params.path }], warnings: [], errors: [], suggestions: [] })); }
+      catch (error) { return text(failure(ctx.cwd, started, error instanceof Error ? error.message : String(error), "COMMAND_FAILED")); }
     },
   });
 
