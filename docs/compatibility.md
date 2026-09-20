@@ -1,16 +1,16 @@
-# Compatibility matrix
+# 호환성 매트릭스 (Compatibility matrix)
 
-| Component | Supported | CI coverage |
+| 구성 요소 | 지원 버전 | CI 테스트 여부 |
 |---|---|---|
-| Node.js | 20, 22, 24 | Yes |
-| pi coding agent | 0.86+ / peer range | Extension smoke test |
-| ROS 2 Humble | Target | Runtime integration planned |
-| ROS 2 Jazzy | Target | Local smoke tested |
-| Ubuntu | 22.04, 24.04 | ROS targets |
-| Python | 3.10+ with `rclpy` and `rosbag2_py` | Runtime-dependent |
+| Node.js | 20, 22, 24 | 지원 (Yes) |
+| pi coding agent | 0.86+ / 피어 의존성 범위 | 확장 패키지 스모크 테스트 |
+| ROS 2 Humble | 공식 지원 대상 | 런타임 통합 테스트 예정 |
+| ROS 2 Jazzy | 공식 지원 대상 | 로컬 스모크 테스트 완료 |
+| Ubuntu | 22.04, 24.04 | ROS 대상 배포판 |
+| Python | 3.10+ (`rclpy`, `rosbag2_py` 포함) | 런타임 환경 종속 |
 
-Static tools such as workspace/package analysis do not require ROS to be installed. Workspace discovery accepts a colcon `src` layout and a single-package repository with `package.xml` at the root. Runtime tools return structured diagnostics when the ROS environment is unavailable or unsourced.
+작업 공간 및 패키지 분석과 같은 정적 도구는 ROS가 시스템에 설치되어 있지 않아도 정상 작동합니다. 작업 공간 탐색은 표준 colcon `src` 구조뿐 아니라 리포지토리 루트에 `package.xml`이 위치한 단일 패키지 구조도 지원합니다. 런타임 도구는 ROS 환경이 소싱되지 않았거나 사용할 수 없는 경우에도 비정상 종료되지 않고 구조화된 진단 정보를 반환합니다.
 
-## Release compatibility
+## 릴리스 호환성 (Release compatibility)
 
-The package follows semantic versioning. The `0.y.z` series may still change public tool schemas; breaking changes will be documented in `CHANGELOG.md`. Release tags must match the version in `package.json`, for example `v0.1.0`.
+본 패키지는 유의적 버전(Semantic Versioning)을 준수합니다. `0.y.z` 시리즈에서는 공개 도구 스키마가 변경될 수 있으며, 하위 호환성을 깨뜨리는 변경사항은 `CHANGELOG.md`에 명시됩니다. 릴리스 태그는 `package.json`에 명시된 버전과 반드시 일치해야 합니다 (예: `v0.1.8`).
