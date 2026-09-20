@@ -1,0 +1,75 @@
+import { spawn } from "node:child_process";
+import { once } from "node:events";
+
+export interface RunOptions {
+  cwd: string;
+  env?: NodeJS.ProcessEnv;
+  timeoutMs?: number;
+  signal?: AbortSignal;
+  maxBytes?: number;
+}
+
+export interface RunResult {
+  code: number | null;
+  stdout: string;
+  stderr: string;
+  timedOut: boolean;
+  cancelled: boolean;
+  truncated: boolean;
+}
+
+function appendLimited(current: string, chunk: string, maxBytes: number): [string, boolean] {
+  const next = current + chunk;
+  if (Buffer.byteLength(next, "utf8") <= maxBytes) return [next, false];
+  return [Buffer.from(next, "utf8").subarray(0, maxBytes).toString("utf8"), true];
+}
+
+export async function runCommand(executable: string, args: string[], options: RunOptions): Promise<RunResult> {
+  const maxBytes = options.maxBytes ?? 50 * 1024;
+  const child = spawn(executable, args, {
+    cwd: options.cwd,
+    env: { ...process.env, ...options.env },
+    detached: process.platform !== "win32",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+  let stdout = "";
+  let stderr = "";
+  let truncated = false;
+  let timedOut = false;
+  let cancelled = false;
+  const onAbort = () => {
+    cancelled = true;
+    terminate(child);
+  };
+  options.signal?.addEventListener("abort", onAbort, { once: true });
+  const timeout = options.timeoutMs ? setTimeout(() => {
+    timedOut = true;
+    terminate(child);
+  }, options.timeoutMs) : undefined;
+
+  child.stdout.on("data", (chunk: Buffer) => {
+    const [next, wasTruncated] = appendLimited(stdout, chunk.toString(), maxBytes);
+    stdout = next;
+    truncated ||= wasTruncated;
+  });
+  child.stderr.on("data", (chunk: Buffer) => {
+    const [next, wasTruncated] = appendLimited(stderr, chunk.toString(), maxBytes);
+    stderr = next;
+    truncated ||= wasTruncated;
+  });
+  const [code] = await once(child, "close") as [number | null];
+  if (timeout) clearTimeout(timeout);
+  options.signal?.removeEventListener("abort", onAbort);
+  return { code, stdout, stderr, timedOut, cancelled, truncated };
+}
+
+function terminate(child: ReturnType<typeof spawn>): void {
+  if (child.pid === undefined) return;
+  try {
+    if (process.platform !== "win32") process.kill(-child.pid, "SIGTERM");
+    else child.kill("SIGTERM");
+  } catch {
+    child.kill("SIGTERM");
+  }
+}
