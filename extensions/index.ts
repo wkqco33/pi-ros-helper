@@ -15,19 +15,24 @@ import { diagnoseColconFailure } from '../src/build/failure.ts';
 import { selectTests } from '../src/build/selection.ts';
 import { planDependencies } from '../src/package/dependency-plan.ts';
 import { summarizeValidation } from '../src/validation/bundle.ts';
+import { buildCompletionEvidence } from '../src/validation/evidence.ts';
+import { checkTdd } from '../src/validation/tdd.ts';
 import { detectStaleTestArtifacts } from '../src/build/staleness.ts';
 import { snapshotGraph, diffGraphs, type GraphSnapshot } from '../src/runtime/graph.ts';
+import { assertGraph } from '../src/runtime/graph-assert.ts';
 import { inspectQos } from '../src/runtime/qos.ts';
 import { analyzeLaunch } from '../src/launch/analyze.ts';
+import { validateLaunch } from '../src/launch/validate.ts';
 import { inspectBag } from '../src/bag/info.ts';
 import { isHighRiskTopic } from '../src/core/safety.ts';
 import { diagnoseTf } from '../src/runtime/tf.ts';
 import { inspectParameters, diffParameters } from '../src/runtime/params.ts';
+import { validateParameterContract } from '../src/runtime/parameter-contract.ts';
 import { analyzeLog } from '../src/runtime/logs.ts';
 import { queryBag } from '../src/bag/query.ts';
 import { runConfirmedControl } from '../src/runtime/control.ts';
 import { join, resolve, dirname, basename } from 'node:path';
-import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
 import { scaffold } from '../src/generate/scaffold.ts';
 import { packageScaffold } from '../src/generate/package.ts';
 import { interfaceScaffold } from '../src/generate/interface.ts';
@@ -499,6 +504,66 @@ export default function (pi: ExtensionAPI) {
           warnings: [],
           errors: [],
           suggestions: [],
+        }),
+      );
+    },
+  });
+
+  pi.registerTool({
+    name: 'ros_parameter_validate',
+    label: 'ROS Parameter Validate',
+    description:
+      'Compare declared ROS 2 parameter types with a supplied configuration map without changing a running node. Read-only.',
+    promptSnippet: 'Validate a ROS 2 parameter configuration contract',
+    parameters: Type.Object({
+      declared: Type.Record(Type.String(), Type.String(), {
+        description: 'Parameter name to declared type, e.g. queue_depth: integer',
+      }),
+      configured: Type.Record(Type.String(), Type.String(), {
+        description: 'Parameter name to configured scalar value as text',
+      }),
+    }),
+    async execute(_id, params, _signal, _update, ctx) {
+      const started = Date.now();
+      const data = validateParameterContract(params.declared, params.configured);
+      return text(
+        result(ctx.cwd, started, {
+          ok: data.ok,
+          summary: data.ok
+            ? 'Parameter configuration matches the declared contract.'
+            : `Parameter contract has ${data.missing.length + data.unknown.length + data.typeMismatches.length} issue(s).`,
+          data,
+          evidence: [
+            ...data.missing.map((name) => ({ kind: 'missing_parameter', name })),
+            ...data.unknown.map((name) => ({ kind: 'unknown_parameter', name })),
+            ...data.typeMismatches.map((item) => ({ kind: 'parameter_type_mismatch', ...item })),
+          ],
+          warnings: [
+            ...data.missing.map((name) => ({
+              code: 'MISSING_PARAMETER',
+              message: `${name} is declared but not configured.`,
+              severity: 'warning' as const,
+            })),
+            ...data.unknown.map((name) => ({
+              code: 'UNKNOWN_PARAMETER',
+              message: `${name} is configured but not declared.`,
+              severity: 'warning' as const,
+            })),
+          ],
+          errors: data.typeMismatches.map((item) => ({
+            code: 'PARAMETER_TYPE_MISMATCH',
+            message: `${item.name} expects ${item.expected} but looks like ${item.actual}.`,
+            severity: 'error' as const,
+          })),
+          suggestions: data.ok
+            ? []
+            : [
+                {
+                  message:
+                    'Review the parameter declaration and YAML/launch value before starting the node.',
+                  confidence: 'high',
+                },
+              ],
         }),
       );
     },
@@ -1302,6 +1367,73 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.registerTool({
+    name: 'ros_launch_validate',
+    label: 'ROS Launch Validate',
+    description:
+      'Validate a ROS 2 launch file statically, including included file existence and identifiable nodes. Does not execute the launch file.',
+    promptSnippet: 'Validate ROS 2 launch files without starting nodes',
+    parameters: Type.Object({ path: Type.String() }),
+    async execute(_id, params, _signal, _update, ctx) {
+      const started = Date.now();
+      try {
+        const analysis = await analyzeLaunch(params.path);
+        const existingFiles = [params.path];
+        for (const include of analysis.includes) {
+          const candidate = resolve(dirname(params.path), include);
+          try {
+            if ((await stat(candidate)).isFile()) existingFiles.push(candidate);
+          } catch {
+            // The validator reports missing includes as structured diagnostics.
+          }
+        }
+        const data = validateLaunch(analysis, existingFiles);
+        return text(
+          result(ctx.cwd, started, {
+            ok: data.ok,
+            summary: data.ok
+              ? 'Launch file passed static validation.'
+              : `Launch validation found ${data.missingFiles.length + data.warnings.length} issue(s).`,
+            data: { analysis, validation: data },
+            evidence: [
+              ...data.missingFiles.map((path) => ({ kind: 'missing_launch_file', path })),
+              ...data.warnings.map((message) => ({ kind: 'launch_warning', message })),
+            ],
+            warnings: data.warnings.map((message) => ({
+              code: 'LAUNCH_VALIDATION',
+              message,
+              severity: 'warning' as const,
+            })),
+            errors: data.missingFiles.map((path) => ({
+              code: 'MISSING_LAUNCH_FILE',
+              message: `Included launch file does not exist: ${path}`,
+              severity: 'error' as const,
+              path,
+            })),
+            suggestions: data.ok
+              ? []
+              : [
+                  {
+                    message:
+                      'Resolve missing includes or inspect dynamic launch code before executing.',
+                    confidence: 'high',
+                  },
+                ],
+          }),
+        );
+      } catch (error) {
+        return text(
+          failure(
+            ctx.cwd,
+            started,
+            error instanceof Error ? error.message : String(error),
+            'OUTPUT_PARSE_FAILED',
+          ),
+        );
+      }
+    },
+  });
+
+  pi.registerTool({
     name: 'ros_bag_inspect',
     label: 'ROS Bag Inspect',
     description:
@@ -1468,6 +1600,109 @@ export default function (pi: ExtensionAPI) {
           ),
         );
       }
+    },
+  });
+
+  pi.registerTool({
+    name: 'ros_tdd_checkpoint',
+    label: 'ROS TDD Checkpoint',
+    description:
+      'Check whether source changes have related test changes before implementation is considered complete. Read-only.',
+    promptSnippet: 'Check the ROS 2 TDD checkpoint for changed files',
+    parameters: Type.Object({
+      changedPaths: Type.Optional(Type.Array(Type.String(), { maxItems: 500 })),
+      testChangedPaths: Type.Optional(Type.Array(Type.String(), { maxItems: 500 })),
+    }),
+    async execute(_id, params, _signal, _update, ctx) {
+      const started = Date.now();
+      let changedPaths = params.changedPaths ?? [];
+      if (!changedPaths.length) {
+        const diff = await runCommand('git', ['diff', '--name-only', 'HEAD'], {
+          cwd: ctx.cwd,
+          timeoutMs: 10_000,
+          maxBytes: 50_000,
+        });
+        changedPaths = diff.stdout.split(/\r?\n/).filter(Boolean);
+      }
+      const data = checkTdd(changedPaths, params.testChangedPaths ?? changedPaths);
+      return text(
+        result(ctx.cwd, started, {
+          ok: data.ok,
+          summary: data.ok
+            ? 'TDD checkpoint passed.'
+            : 'TDD checkpoint found source changes without related tests.',
+          data,
+          evidence: data.reasons.map((message) => ({ kind: 'tdd_blocker', message })),
+          warnings: data.reasons.map((message) => ({
+            code: 'TDD_CHECKPOINT',
+            message,
+            severity: 'warning' as const,
+          })),
+          errors: [],
+          suggestions: data.ok
+            ? []
+            : [
+                {
+                  message:
+                    'Add the smallest focused test for the changed behavior before final validation.',
+                  confidence: 'high',
+                },
+              ],
+        }),
+      );
+    },
+  });
+
+  pi.registerTool({
+    name: 'ros_completion_evidence',
+    label: 'ROS Completion Evidence',
+    description:
+      'Build a conservative completion report from build/test execution and stale-artifact status. Read-only.',
+    promptSnippet: 'Create evidence for a ROS 2 completion report',
+    parameters: Type.Object({
+      buildExecuted: Type.Boolean(),
+      buildOk: Type.Boolean(),
+      testExecuted: Type.Boolean(),
+      testOk: Type.Boolean(),
+      stale: Type.Boolean(),
+      changedPaths: Type.Array(Type.String(), { maxItems: 500 }),
+    }),
+    async execute(_id, params, _signal, _update, ctx) {
+      const started = Date.now();
+      const data = buildCompletionEvidence(params);
+      return text(
+        result(ctx.cwd, started, {
+          ok: data.ok,
+          summary: data.ok
+            ? 'Completion evidence is sufficient for the supplied checks.'
+            : 'Completion evidence is incomplete or contains failing checks.',
+          data,
+          evidence: data.blockers.map((message) => ({ kind: 'completion_blocker', message })),
+          warnings: data.blockers.map((message) => ({
+            code: 'INCOMPLETE_EVIDENCE',
+            message,
+            severity: 'warning' as const,
+          })),
+          errors: data.ok
+            ? []
+            : [
+                {
+                  code: 'COMPLETION_NOT_PROVEN',
+                  message: 'The supplied evidence does not prove completion.',
+                  severity: 'error' as const,
+                },
+              ],
+          suggestions: data.ok
+            ? []
+            : [
+                {
+                  message:
+                    'Run ros_validation_bundle and address every blocker before reporting completion.',
+                  confidence: 'high',
+                },
+              ],
+        }),
+      );
     },
   });
 
@@ -1640,6 +1875,78 @@ export default function (pi: ExtensionAPI) {
           truncated: buildRun.truncated || testRun.truncated,
         }),
       );
+    },
+  });
+
+  pi.registerTool({
+    name: 'ros_graph_assert',
+    label: 'ROS Graph Assert',
+    description:
+      'Compare an expected ROS graph shape with a current or supplied snapshot and report missing or unexpected resources. Read-only.',
+    promptSnippet: 'Assert the expected ROS 2 graph state',
+    parameters: Type.Object({
+      expected: Type.Object({
+        nodes: Type.Array(Type.String()),
+        topics: Type.Array(Type.String()),
+        services: Type.Array(Type.String()),
+      }),
+      current: Type.Optional(Type.Unknown()),
+    }),
+    async execute(_id, params, signal, _update, ctx) {
+      const started = Date.now();
+      try {
+        const current =
+          (params.current as GraphSnapshot | undefined) ?? (await snapshotGraph(ctx.cwd, signal));
+        const shape = {
+          nodes: current.nodes,
+          topics: current.topics.map((topic) => topic.name),
+          services: current.services,
+        };
+        const data = assertGraph(params.expected, shape);
+        return text(
+          result(ctx.cwd, started, {
+            ok: data.ok,
+            summary: data.ok
+              ? 'ROS graph matches the expected shape.'
+              : 'ROS graph differs from the expected shape.',
+            data,
+            evidence: [
+              ...data.missing.nodes.map((name) => ({ kind: 'missing_node', name })),
+              ...data.missing.topics.map((name) => ({ kind: 'missing_topic', name })),
+              ...data.unexpected.nodes.map((name) => ({ kind: 'unexpected_node', name })),
+              ...data.unexpected.topics.map((name) => ({ kind: 'unexpected_topic', name })),
+            ],
+            warnings: [],
+            errors: data.ok
+              ? []
+              : [
+                  {
+                    code: 'GRAPH_ASSERTION_FAILED',
+                    message: 'Expected ROS graph resources do not match the current graph.',
+                    severity: 'error' as const,
+                  },
+                ],
+            suggestions: data.ok
+              ? []
+              : [
+                  {
+                    message:
+                      'Inspect launch, namespace, discovery, and QoS configuration before changing application code.',
+                    confidence: 'high',
+                  },
+                ],
+          }),
+        );
+      } catch (error) {
+        return text(
+          failure(
+            ctx.cwd,
+            started,
+            error instanceof Error ? error.message : String(error),
+            'GRAPH_UNAVAILABLE',
+          ),
+        );
+      }
     },
   });
 

@@ -10,6 +10,11 @@ Version `0.1.6` ships the bounded inspection and control tools documented by the
 - `ros_workspace_inspect` — enumerate packages and detect duplicate package names
 - `ros_package_analyze` — compare `package.xml` with build files; accepts a package name or a path
 - `ros_dependency_plan` — detect undeclared dependencies from C++ includes and CMake references and preview manifest/build actions
+- `ros_parameter_validate` — compare declared parameter types with configuration values without changing a running node
+- `ros_launch_validate` — validate launch includes and static node discovery without starting nodes
+- `ros_graph_assert` — compare an expected graph shape with the current graph
+- `ros_tdd_checkpoint` — detect source changes without related test changes
+- `ros_completion_evidence` — conservatively decide whether supplied build/test evidence proves completion
 - `ros_failure_diagnose` — classify the first actionable colcon failure and suggest the next investigation step
 - `ros_test_select` — select focused test targets from changed paths without running tests
 - `ros_validation_bundle` — preview or run build-then-test validation and return one evidence-oriented result; stale artifacts fail validation

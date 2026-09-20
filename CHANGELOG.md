@@ -2,6 +2,22 @@
 
 All notable changes are documented here.
 
+## [Unreleased]
+
+### Added
+
+- `ros_parameter_validate` compares declared parameter types with configuration values without mutating a running node.
+- `ros_launch_validate` validates included files and static launch node discovery without starting nodes.
+- `ros_graph_assert` checks expected versus actual nodes, topics, and services.
+- `ros_tdd_checkpoint` and `ros_completion_evidence` provide conservative development and completion gates.
+- Safety regression coverage for namespaced actuator topics, QoS semantics, and missing subprocesses.
+
+### Fixed
+
+- Runtime graph snapshots no longer report partial command results as a complete graph.
+- TF diagnostics honor the requested bounded timeout.
+- QoS diagnostics distinguish actual incompatibilities from harmless policy differences.
+
 ## [0.1.7] - 2026-09-20
 
 ### Added
