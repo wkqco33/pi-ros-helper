@@ -71,6 +71,22 @@ test('readTestResults attributes a failure to its binary, suite, and source line
   }
 });
 
+test('readTestResults can filter results to selected test binaries', async () => {
+  const dir = await fixture({
+    'build/demo_pkg/test_results/demo_pkg/test_rate_limiter.gtest.xml': GTEST_XML,
+    'build/demo_pkg/test_results/demo_pkg/test_bounded_queue.ctest.xml': CTEST_XML,
+  });
+  try {
+    const results = await readTestResults(dir, ['test_bounded_queue']);
+    assert.deepEqual(
+      results.map((result) => result.package),
+      ['test_bounded_queue'],
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test('readTestResults reads the assertion location from a message-only failure', async () => {
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <testsuites tests="1" failures="1" disabled="0" errors="0" name="AllTests">

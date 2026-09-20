@@ -1718,6 +1718,7 @@ export default function (pi: ExtensionAPI) {
     ],
     parameters: Type.Object({
       packages: Type.Optional(Type.Array(Type.String())),
+      testTargets: Type.Optional(Type.Array(Type.String(), { maxItems: 500 })),
       symlinkInstall: Type.Optional(Type.Boolean()),
       buildType: Type.Optional(
         Type.Union([
@@ -1743,6 +1744,8 @@ export default function (pi: ExtensionAPI) {
       if (params.packages?.length) buildArgs.push('--packages-select', ...params.packages);
       const testArgs = ['test'];
       if (params.packages?.length) testArgs.push('--packages-select', ...params.packages);
+      if (params.testTargets?.length)
+        testArgs.push('--ctest-args', '-R', ctestRegex(params.testTargets));
       const buildCommand = { executable: 'colcon', args: buildArgs, cwd: workspace.root };
       const testCommand = { executable: 'colcon', args: testArgs, cwd: workspace.root };
       if (!params.execute) {
@@ -1793,7 +1796,7 @@ export default function (pi: ExtensionAPI) {
           signal,
           timeoutMs,
         });
-        testResults = await readTestResults(workspace.root);
+        testResults = await readTestResults(workspace.root, params.testTargets);
       }
       const testTotals = summarizeTestResults(testResults);
       const testOk =
@@ -1999,7 +2002,7 @@ export default function (pi: ExtensionAPI) {
       });
       const output = `${run.stdout}\n${run.stderr}`;
       const failures = classifyColconOutput(output);
-      const testResults = await readTestResults(workspace.root);
+      const testResults = await readTestResults(workspace.root, params.testTargets);
       const totals = summarizeTestResults(testResults);
       const failingTests = testResults.flatMap((item) =>
         item.cases.map((entry) => ({

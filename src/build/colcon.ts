@@ -243,7 +243,7 @@ export function summarizeTestResults(results: TestResult[]): TestTotals {
   );
 }
 
-async function collectXml(dir: string, output: TestResult[]): Promise<void> {
+async function collectXml(dir: string, output: TestResult[], targets?: string[]): Promise<void> {
   let entries;
   try {
     entries = await readdir(dir, { withFileTypes: true });
@@ -252,18 +252,23 @@ async function collectXml(dir: string, output: TestResult[]): Promise<void> {
   }
   for (const entry of entries) {
     const path = join(dir, entry.name);
-    if (entry.isDirectory()) await collectXml(path, output);
+    if (entry.isDirectory()) await collectXml(path, output, targets);
     else if (entry.name.endsWith('.xml') && (await stat(path)).isFile()) {
+      const binary = binaryName(entry.name);
+      if (targets?.length && !targets.includes(binary)) continue;
       const xml = await readFile(path, 'utf8');
       if (!/<testsuite|<testsuites/.test(xml)) continue;
-      output.push(...parseJUnit(xml, binaryName(entry.name)));
+      output.push(...parseJUnit(xml, binary));
     }
   }
 }
 
-export async function readTestResults(workspace: string): Promise<TestResult[]> {
+export async function readTestResults(
+  workspace: string,
+  targets?: string[],
+): Promise<TestResult[]> {
   const output: TestResult[] = [];
-  await collectXml(join(workspace, 'build'), output);
+  await collectXml(join(workspace, 'build'), output, targets);
   return output;
 }
 
