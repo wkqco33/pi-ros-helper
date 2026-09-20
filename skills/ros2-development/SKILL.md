@@ -13,13 +13,15 @@ Use the ROS-specific tools before falling back to raw shell commands.
 1. Run `ros_environment` when the ROS setup or workspace is unclear.
 2. Run `ros_workspace_inspect` before selecting packages for a build. It discovers both a colcon `src` layout and a single-package repository with `package.xml` at the root.
 3. Use `ros_package_analyze` with a package name or a path before editing `package.xml` or build files.
-4. For build failures, inspect the first compiler/CMake/rosidl error before downstream failures.
-5. `colcon test` does not rebuild. After editing sources or tests, run `ros_build` before `ros_test`; a `STALE_TEST_ARTIFACTS` warning means the result came from an outdated binary.
-6. For runtime communication failures, inspect graph, type, QoS, and TF in that order.
-7. Keep topic sampling bounded; never start an unbounded `ros2 topic echo`.
+4. Use `ros_dependency_plan` before editing package.xml or CMakeLists.txt; it previews undeclared dependencies without writing files.
+5. For build failures, use `ros_failure_diagnose` on bounded output and inspect the first compiler/CMake/rosidl error before downstream failures.
+6. Use `ros_test_select` after a source change to choose focused tests, or `ros_validation_bundle` when a rebuild followed by tests should be treated as one evidence-bearing gate.
+7. `colcon test` does not rebuild. After editing sources or tests, run `ros_build` before `ros_test`; a `STALE_TEST_ARTIFACTS` warning means the result came from an outdated binary.
+8. For runtime communication failures, inspect graph, type, QoS, and TF in that order.
+9. Keep topic sampling bounded; never start an unbounded `ros2 topic echo`.
 
 ## Safety
 
-`ros_build` previews its command and only executes when `execute=true`. Runtime commands that publish, change parameters, send actions, or transition lifecycle nodes require explicit confirmation and should not run in non-interactive mode.
+`ros_build` and `ros_validation_bundle` preview their commands and only execute when `execute=true`. Runtime commands that publish, change parameters, send actions, or transition lifecycle nodes require explicit confirmation and should not run in non-interactive mode.
 
 Treat `/cmd_vel`, actuator, motor, emergency, and shutdown topics as high risk. Never send a repeated command without a finite duration, rate, and user confirmation.

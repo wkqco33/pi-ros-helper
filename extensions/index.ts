@@ -11,6 +11,10 @@ import {
   summarizeBuildWarnings,
   summarizeTestResults,
 } from '../src/build/colcon.ts';
+import { diagnoseColconFailure } from '../src/build/failure.ts';
+import { selectTests } from '../src/build/selection.ts';
+import { planDependencies } from '../src/package/dependency-plan.ts';
+import { summarizeValidation } from '../src/validation/bundle.ts';
 import { detectStaleTestArtifacts } from '../src/build/staleness.ts';
 import { snapshotGraph, diffGraphs, type GraphSnapshot } from '../src/runtime/graph.ts';
 import { inspectQos } from '../src/runtime/qos.ts';
@@ -23,10 +27,32 @@ import { analyzeLog } from '../src/runtime/logs.ts';
 import { queryBag } from '../src/bag/query.ts';
 import { runConfirmedControl } from '../src/runtime/control.ts';
 import { join, resolve, dirname, basename } from 'node:path';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { scaffold } from '../src/generate/scaffold.ts';
 import { packageScaffold } from '../src/generate/package.ts';
 import { interfaceScaffold } from '../src/generate/interface.ts';
+
+async function readDependencySources(root: string): Promise<string> {
+  const chunks: string[] = [];
+  async function visit(path: string): Promise<void> {
+    let entries;
+    try {
+      entries = await readdir(path, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const child = join(path, entry.name);
+      if (entry.isDirectory() && !['build', 'install', 'log'].includes(entry.name))
+        await visit(child);
+      else if (entry.isFile() && /\.(?:c|cc|cpp|cxx|h|hh|hpp|hxx|ipp|tpp)$/.test(entry.name)) {
+        chunks.push(await readFile(child, 'utf8').catch(() => ''));
+      }
+    }
+  }
+  await visit(root);
+  return chunks.join('\n');
+}
 
 const text = (value: unknown) => ({
   content: [{ type: 'text' as const, text: JSON.stringify(value, null, 2) }],
@@ -203,6 +229,152 @@ export default function (pi: ExtensionAPI) {
                 confidence: 'medium' as const,
               },
             ],
+          }),
+        );
+      } catch (error) {
+        return text(
+          failure(
+            ctx.cwd,
+            started,
+            error instanceof Error ? error.message : String(error),
+            'OUTPUT_PARSE_FAILED',
+          ),
+        );
+      }
+    },
+  });
+
+  pi.registerTool({
+    name: 'ros_failure_diagnose',
+    label: 'ROS Failure Diagnose',
+    description:
+      'Classify the first actionable colcon failure, explain likely causes, and suggest the next focused investigation step. Read-only.',
+    promptSnippet: 'Diagnose the first actionable ROS 2 build or test failure',
+    parameters: Type.Object({
+      output: Type.String({ description: 'Bounded colcon, compiler, CMake, or test output' }),
+    }),
+    async execute(_id, params, _signal, _update, ctx) {
+      const started = Date.now();
+      const data = diagnoseColconFailure(params.output);
+      return text(
+        result(ctx.cwd, started, {
+          ok: data.kind === 'unknown' ? false : true,
+          summary: `${data.kind} failure: ${data.message}`,
+          data,
+          evidence: data.failures.map((item) => ({ kind: item.kind, message: item.message })),
+          warnings: [],
+          errors:
+            data.kind === 'unknown'
+              ? [
+                  {
+                    code: 'NO_ACTIONABLE_FAILURE',
+                    message: data.message,
+                    severity: 'error' as const,
+                  },
+                ]
+              : [],
+          suggestions: data.suggestions.map((message) => ({
+            message,
+            confidence: 'high' as const,
+          })),
+        }),
+      );
+    },
+  });
+
+  pi.registerTool({
+    name: 'ros_test_select',
+    label: 'ROS Test Select',
+    description:
+      'Select likely affected ROS 2 test targets from changed paths without running tests. Read-only.',
+    promptSnippet: 'Select focused ROS 2 tests from changed files',
+    parameters: Type.Object({
+      changedPaths: Type.Optional(Type.Array(Type.String(), { maxItems: 500 })),
+      testTargets: Type.Array(Type.String(), { minItems: 1, maxItems: 500 }),
+    }),
+    async execute(_id, params, _signal, _update, ctx) {
+      const started = Date.now();
+      let changedPaths = params.changedPaths ?? [];
+      const commands = [];
+      if (!changedPaths.length) {
+        const diff = await runCommand('git', ['diff', '--name-only'], {
+          cwd: ctx.cwd,
+          timeoutMs: 10_000,
+          maxBytes: 50_000,
+        });
+        changedPaths = diff.stdout.split(/\r?\n/).filter(Boolean);
+        commands.push({ executable: 'git', args: ['diff', '--name-only'], cwd: ctx.cwd });
+      }
+      const selected = selectTests(changedPaths, params.testTargets);
+      return text(
+        result(ctx.cwd, started, {
+          ok: selected.length > 0,
+          summary: selected.length
+            ? `Selected ${selected.length} focused test target(s).`
+            : 'No test target matched the changed paths; run the package test set or inspect dependencies.',
+          data: { changedPaths, selected, availableTargets: params.testTargets },
+          evidence: [{ kind: 'test_selection', changedPathCount: changedPaths.length, selected }],
+          warnings: selected.length
+            ? []
+            : [
+                {
+                  code: 'NO_MATCHING_TESTS',
+                  message: 'No focused test target was selected.',
+                  severity: 'warning' as const,
+                },
+              ],
+          errors: [],
+          suggestions: [],
+          commands,
+        }),
+      );
+    },
+  });
+
+  pi.registerTool({
+    name: 'ros_dependency_plan',
+    label: 'ROS Dependency Plan',
+    description:
+      'Compare ROS 2 includes and CMake find_package references with package.xml and preview dependency changes. Read-only.',
+    promptSnippet: 'Plan ROS 2 package dependency changes',
+    parameters: Type.Object({
+      package: Type.Optional(Type.String({ description: 'Package name or path' })),
+    }),
+    async execute(_id, params, _signal, _update, ctx) {
+      const started = Date.now();
+      const pkg = await resolvePackage(ctx.cwd, params.package);
+      if (!pkg)
+        return text(
+          failure(
+            ctx.cwd,
+            started,
+            `Package not found: ${params.package ?? '(none)'}`,
+            'PACKAGE_NOT_FOUND',
+          ),
+        );
+      try {
+        const [packageXml, source, build] = await Promise.all([
+          readFile(join(pkg.path, 'package.xml'), 'utf8'),
+          readDependencySources(pkg.path),
+          readFile(join(pkg.path, 'CMakeLists.txt'), 'utf8').catch(() => ''),
+        ]);
+        const data = planDependencies({ packageXml, source, build });
+        return text(
+          result(ctx.cwd, started, {
+            ok: data.missing.length === 0,
+            summary: data.missing.length
+              ? `${data.missing.length} undeclared dependency reference(s) found in ${pkg.name}.`
+              : `${pkg.name} has no detected undeclared dependency references.`,
+            data,
+            evidence: data.missing.map((name) => ({ kind: 'missing_dependency', package: name })),
+            warnings: data.missing.map((name) => ({
+              code: 'MISSING_DEPENDENCY',
+              message: `${name} is referenced but not declared.`,
+              severity: 'warning' as const,
+              path: pkg.path,
+            })),
+            errors: [],
+            suggestions: data.actions.map((message) => ({ message, confidence: 'high' as const })),
           }),
         );
       } catch (error) {
@@ -1290,6 +1462,178 @@ export default function (pi: ExtensionAPI) {
           ),
         );
       }
+    },
+  });
+
+  pi.registerTool({
+    name: 'ros_validation_bundle',
+    label: 'ROS Validation Bundle',
+    description:
+      'Preview or run a bounded colcon build followed by tests and return one evidence-oriented validation summary. Execution is opt-in.',
+    promptSnippet: 'Run the ROS 2 build and test validation bundle',
+    promptGuidelines: [
+      'Use ros_validation_bundle with execute false first; a preview is never reported as a passing validation.',
+      'The bundle rebuilds before testing and treats stale test artifacts as a validation failure.',
+    ],
+    parameters: Type.Object({
+      packages: Type.Optional(Type.Array(Type.String())),
+      symlinkInstall: Type.Optional(Type.Boolean()),
+      buildType: Type.Optional(
+        Type.Union([
+          Type.Literal('Debug'),
+          Type.Literal('Release'),
+          Type.Literal('RelWithDebInfo'),
+        ]),
+      ),
+      execute: Type.Optional(Type.Boolean()),
+      timeoutSeconds: Type.Optional(Type.Integer({ minimum: 1, maximum: 3600 })),
+    }),
+    async execute(_id, params, signal, _update, ctx) {
+      const started = Date.now();
+      const workspace = await inspectWorkspace(ctx.cwd);
+      if (!workspace.root)
+        return text(
+          failure(ctx.cwd, started, 'No ROS 2 workspace was found.', 'WORKSPACE_NOT_FOUND'),
+        );
+      const buildArgs = ['build'];
+      if (params.symlinkInstall) buildArgs.push('--symlink-install');
+      if (params.buildType)
+        buildArgs.push('--cmake-args', `-DCMAKE_BUILD_TYPE=${params.buildType}`);
+      if (params.packages?.length) buildArgs.push('--packages-select', ...params.packages);
+      const testArgs = ['test'];
+      if (params.packages?.length) testArgs.push('--packages-select', ...params.packages);
+      const buildCommand = { executable: 'colcon', args: buildArgs, cwd: workspace.root };
+      const testCommand = { executable: 'colcon', args: testArgs, cwd: workspace.root };
+      if (!params.execute) {
+        const validation = summarizeValidation({
+          build: { executed: false, ok: true },
+          test: { executed: false, ok: true, failures: 0 },
+          stale: false,
+        });
+        return text(
+          result(ctx.cwd, started, {
+            ok: false,
+            summary: 'Validation commands previewed; no build or test was executed.',
+            data: { validation, buildCommand, testCommand },
+            evidence: [
+              { kind: 'command_preview', ...buildCommand },
+              { kind: 'command_preview', ...testCommand },
+            ],
+            warnings: [],
+            errors: [],
+            suggestions: [
+              { message: 'Set execute=true after reviewing both commands.', confidence: 'high' },
+            ],
+            commands: [buildCommand, testCommand],
+          }),
+        );
+      }
+      const timeoutMs = (params.timeoutSeconds ?? 900) * 1000;
+      const buildRun = await runCommand(buildCommand.executable, buildCommand.args, {
+        cwd: workspace.root,
+        signal,
+        timeoutMs,
+      });
+      const buildOutput = `${buildRun.stdout}\n${buildRun.stderr}`.trim();
+      const buildFailures = classifyColconOutput(buildOutput);
+      const buildOk = !buildRun.cancelled && !buildRun.timedOut && buildRun.code === 0;
+      let testRun = {
+        code: null as number | null,
+        stdout: '',
+        stderr: '',
+        timedOut: false,
+        cancelled: false,
+        truncated: false,
+      };
+      let testResults: Awaited<ReturnType<typeof readTestResults>> = [];
+      if (buildOk) {
+        testRun = await runCommand(testCommand.executable, testCommand.args, {
+          cwd: workspace.root,
+          signal,
+          timeoutMs,
+        });
+        testResults = await readTestResults(workspace.root);
+      }
+      const testTotals = summarizeTestResults(testResults);
+      const testOk =
+        buildOk &&
+        !testRun.cancelled &&
+        !testRun.timedOut &&
+        testRun.code === 0 &&
+        testTotals.failures === 0;
+      const stale = await detectStaleTestArtifacts(workspace.root);
+      const validation = summarizeValidation({
+        build: { executed: true, ok: buildOk, exitCode: buildRun.code },
+        test: {
+          executed: buildOk,
+          ok: testOk,
+          exitCode: testRun.code,
+          failures: testTotals.failures,
+        },
+        stale: Boolean(stale),
+      });
+      const failedTests = testResults.flatMap((item) =>
+        item.cases.map((entry) => `${item.package}: ${entry.suite}.${entry.name}`),
+      );
+      return text(
+        result(ctx.cwd, started, {
+          ok: validation.ok,
+          summary: validation.reason,
+          data: {
+            validation,
+            build: {
+              exitCode: buildRun.code,
+              failures: buildFailures,
+              stdout: buildRun.stdout,
+              stderr: buildRun.stderr,
+            },
+            test: {
+              exitCode: testRun.code,
+              summary: testTotals,
+              failingTests: failedTests,
+              stdout: testRun.stdout,
+              stderr: testRun.stderr,
+            },
+            staleArtifacts: stale
+              ? { source: stale.newestSource.path, binary: stale.newestBinary.path }
+              : null,
+          },
+          evidence: [
+            { kind: 'validation', ...validation.checks },
+            ...buildFailures.map((item) => ({ kind: item.kind, message: item.message })),
+            ...failedTests.map((message) => ({ kind: 'test_failure', message })),
+          ],
+          warnings: stale
+            ? [
+                {
+                  code: 'STALE_TEST_ARTIFACTS',
+                  message: 'Test artifacts are older than current sources.',
+                  severity: 'warning' as const,
+                },
+              ]
+            : [],
+          errors: validation.ok
+            ? []
+            : [
+                {
+                  code: 'VALIDATION_FAILED',
+                  message: validation.reason,
+                  severity: 'error' as const,
+                },
+              ],
+          suggestions: validation.ok
+            ? []
+            : [
+                {
+                  message:
+                    'Inspect build failures first, then rerun the bundle after fixing the earliest failure.',
+                  confidence: 'high',
+                },
+              ],
+          commands: [buildCommand, testCommand],
+          truncated: buildRun.truncated || testRun.truncated,
+        }),
+      );
     },
   });
 

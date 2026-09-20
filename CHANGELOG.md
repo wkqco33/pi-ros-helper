@@ -2,6 +2,16 @@
 
 All notable changes are documented here.
 
+## [Unreleased]
+
+### Added
+
+- `ros_failure_diagnose` classifies the first actionable colcon/compiler/CMake/rosidl/test failure and returns bounded suggestions.
+- `ros_test_select` selects likely focused test targets from changed paths without running ROS commands.
+- `ros_dependency_plan` compares C++ includes and CMake references with package.xml and previews dependency actions without editing files.
+- `ros_validation_bundle` previews or executes a bounded build-then-test sequence and returns one evidence-oriented result; previews are never reported as passes and stale artifacts fail the gate.
+- Unit tests covering failure diagnosis, focused test selection, dependency planning, and validation gating.
+
 ## [0.1.6] - 2026-09-20
 
 ### Fixed

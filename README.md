@@ -9,6 +9,10 @@ Version `0.1.6` ships the bounded inspection and control tools documented by the
 - `ros_environment` — inspect ROS distro, RMW, domain, setup files, and workspace discovery
 - `ros_workspace_inspect` — enumerate packages and detect duplicate package names
 - `ros_package_analyze` — compare `package.xml` with build files; accepts a package name or a path
+- `ros_dependency_plan` — detect undeclared dependencies from C++ includes and CMake references and preview manifest/build actions
+- `ros_failure_diagnose` — classify the first actionable colcon failure and suggest the next investigation step
+- `ros_test_select` — select focused test targets from changed paths without running tests
+- `ros_validation_bundle` — preview or run build-then-test validation and return one evidence-oriented result; stale artifacts fail validation
 - `ros_build` — preview or explicitly run a bounded `colcon build`; summarizes compiler warnings by file and flag
 - `ros_test` — preview or explicitly run `colcon test`; reports failing test cases with suite, file, and line, and warns when the test binaries are older than the sources
 - `ros_log_analyze` — summarize errors, warnings, and failing test lines in a ROS, colcon, or test log
