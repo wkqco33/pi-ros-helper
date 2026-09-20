@@ -11,10 +11,11 @@ Use the ROS-specific tools before falling back to raw shell commands.
 ## Investigation order
 
 1. Run `ros_environment` when the ROS setup or workspace is unclear.
-2. Run `ros_workspace_inspect` before selecting packages for a build.
-3. For build failures, inspect the first compiler/CMake/rosidl error before downstream failures.
-4. For runtime communication failures, inspect graph, type, QoS, and TF in that order.
-5. Keep topic sampling bounded; never start an unbounded `ros2 topic echo`.
+2. Run `ros_workspace_inspect` before selecting packages for a build. It discovers both a colcon `src` layout and a single-package repository with `package.xml` at the root.
+3. Use `ros_package_analyze` with a package name or a path before editing `package.xml` or build files.
+4. For build failures, inspect the first compiler/CMake/rosidl error before downstream failures.
+5. For runtime communication failures, inspect graph, type, QoS, and TF in that order.
+6. Keep topic sampling bounded; never start an unbounded `ros2 topic echo`.
 
 ## Safety
 

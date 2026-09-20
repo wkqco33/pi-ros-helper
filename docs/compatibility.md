@@ -9,7 +9,7 @@
 | Ubuntu | 22.04, 24.04 | ROS targets |
 | Python | 3.10+ with `rclpy` and `rosbag2_py` | Runtime-dependent |
 
-Static tools such as workspace/package analysis do not require ROS to be installed. Runtime tools return structured diagnostics when the ROS environment is unavailable or unsourced.
+Static tools such as workspace/package analysis do not require ROS to be installed. Workspace discovery accepts a colcon `src` layout and a single-package repository with `package.xml` at the root. Runtime tools return structured diagnostics when the ROS environment is unavailable or unsourced.
 
 ## Release compatibility
 

@@ -4,10 +4,11 @@ ROS 2 development tools for the [pi coding agent](https://github.com/badlogic/pi
 
 ## Current status
 
-Version `0.1.0` provides the foundation and first MVP tools:
+Version `0.1.4` ships the bounded inspection and control tools documented by the bundled `ros2-development` skill, including:
 
 - `ros_environment` — inspect ROS distro, RMW, domain, setup files, and workspace discovery
 - `ros_workspace_inspect` — enumerate packages and detect duplicate package names
+- `ros_package_analyze` — compare `package.xml` with build files; accepts a package name or a path
 - `ros_build` — preview or explicitly run a bounded `colcon build`
 - `/ros-status` — concise interactive status notification
 
@@ -44,6 +45,7 @@ The extension does not require ROS to be installed in order to load. ROS-specifi
 - Node.js 20 or newer
 - ROS 2 Jazzy and Humble are the initial targets
 - Runtime tools require a sourced ROS environment; static workspace and package tools do not
+- Workspace discovery supports a colcon `src` layout and a single-package repository whose `package.xml` sits at the root
 - The package is licensed under Apache-2.0; see `LICENSE`
 
 See `CHANGELOG.md` for release history, `AGENTS.md` for development rules, `docs/compatibility.md` for supported runtimes, and `SECURITY.md` for vulnerability reporting.

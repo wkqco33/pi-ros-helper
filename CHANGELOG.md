@@ -2,6 +2,24 @@
 
 All notable changes are documented here.
 
+## [0.1.4] - 2026-09-20
+
+### Fixed
+
+- `ros_workspace_inspect` now discovers a package whose `package.xml` sits at the workspace root, so single-package repositories no longer report zero packages.
+- `findWorkspace` treats a directory containing `package.xml` as a workspace root in addition to one containing `src`.
+- `ros_package_analyze` resolves an absolute path, a relative path, a `package.xml` file, or a package name, and no longer fails with `PACKAGE_NOT_FOUND` when the manifest is at the repository root.
+- `ros_launch_analyze` detects Python `Node(...)` actions that span multiple lines and reads XML `<node>` attributes instead of relying on single-line matches.
+- `ros_scaffold_preview` now emits real ROS 2 publisher and subscriber code; previously `kind` was accepted but ignored and both kinds produced an empty node.
+- `ros_log_analyze` classifies a line by its ROS severity tag first, so a `[WARN]` line that merely mentions "error" is no longer counted as an error.
+- `ros_param_diff` reports `ok: true` when the comparison succeeds; differences are returned as data rather than as a failure.
+- `ros_interface_scaffold_preview` no longer copies the supplied fields into the result and feedback sections of an action definition.
+- Tool metadata reports the real `package.json` version instead of a hardcoded `0.1.0`.
+
+### Added
+
+- Regression tests for single-package workspace discovery, path-based package resolution, multi-line and XML launch node detection, publisher/subscriber scaffold output, ROS severity classification, action interface sections, and tool version reporting.
+
 ## [0.1.3] - 2026-09-20
 
 ### Fixed
