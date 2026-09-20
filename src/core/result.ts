@@ -1,4 +1,4 @@
-export type DiagnosticSeverity = "info" | "warning" | "error";
+export type DiagnosticSeverity = 'info' | 'warning' | 'error';
 
 export interface Diagnostic {
   code?: string;
@@ -16,7 +16,7 @@ export interface Evidence {
 
 export interface Suggestion {
   message: string;
-  confidence?: "low" | "medium" | "high";
+  confidence?: 'low' | 'medium' | 'high';
   command?: string;
 }
 
@@ -46,11 +46,15 @@ export interface RosToolResult<T = unknown> {
   metadata: ToolMetadata;
 }
 
-export function result<T>(cwd: string, startedAt: number, value: Omit<RosToolResult<T>, "metadata"> & { truncated?: boolean; rosDistro?: string }): RosToolResult<T> {
+export function result<T>(
+  cwd: string,
+  startedAt: number,
+  value: Omit<RosToolResult<T>, 'metadata'> & { truncated?: boolean; rosDistro?: string },
+): RosToolResult<T> {
   return {
     ...value,
     metadata: {
-      toolVersion: "0.1.0",
+      toolVersion: '0.1.0',
       cwd,
       durationMs: Date.now() - startedAt,
       truncated: value.truncated ?? false,
@@ -59,13 +63,19 @@ export function result<T>(cwd: string, startedAt: number, value: Omit<RosToolRes
   };
 }
 
-export function failure(cwd: string, startedAt: number, message: string, code: string, details?: Partial<RosToolResult>): RosToolResult {
+export function failure(
+  cwd: string,
+  startedAt: number,
+  message: string,
+  code: string,
+  details?: Partial<RosToolResult>,
+): RosToolResult {
   return result(cwd, startedAt, {
     ok: false,
     summary: message,
     evidence: [],
     warnings: [],
-    errors: [{ code, message, severity: "error" }],
+    errors: [{ code, message, severity: 'error' }],
     suggestions: [],
     ...details,
   });

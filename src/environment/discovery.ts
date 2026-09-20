@@ -1,6 +1,6 @@
-import { access, readdir, stat } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
-import { runCommand } from "../core/runner.ts";
+import { access, readdir, stat } from 'node:fs/promises';
+import { dirname, join, resolve } from 'node:path';
+import { runCommand } from '../core/runner.ts';
 
 export interface RosEnvironment {
   distro?: string;
@@ -15,14 +15,19 @@ export interface RosEnvironment {
 }
 
 async function exists(path: string): Promise<boolean> {
-  try { await access(path); return true; } catch { return false; }
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export async function findWorkspace(start: string): Promise<string | undefined> {
   let current = resolve(start);
   while (true) {
-    const src = join(current, "src");
-    if (await exists(src) && (await stat(src)).isDirectory()) return current;
+    const src = join(current, 'src');
+    if ((await exists(src)) && (await stat(src)).isDirectory()) return current;
     const parent = dirname(current);
     if (parent === current) return undefined;
     current = parent;
@@ -37,21 +42,27 @@ export async function detectEnvironment(cwd: string): Promise<RosEnvironment> {
     if (await exists(distroSetup)) setupFiles.push(distroSetup);
   }
   if (env.AMENT_PREFIX_PATH) {
-    for (const prefix of env.AMENT_PREFIX_PATH.split(":")) {
-      const candidate = join(prefix, "setup.bash");
+    for (const prefix of env.AMENT_PREFIX_PATH.split(':')) {
+      const candidate = join(prefix, 'setup.bash');
       if (await exists(candidate)) setupFiles.push(candidate);
     }
   }
   const workspace = await findWorkspace(cwd);
   if (workspace) {
-    const candidate = join(workspace, "install", "setup.bash");
+    const candidate = join(workspace, 'install', 'setup.bash');
     if (await exists(candidate)) setupFiles.push(candidate);
   }
-  const ros2 = await runCommand("ros2", ["--help"], { cwd, timeoutMs: 3000, maxBytes: 2048 });
-  const python = await runCommand("python3", ["-c", "import rclpy"], { cwd, timeoutMs: 3000, maxBytes: 2048 });
+  const ros2 = await runCommand('ros2', ['--help'], { cwd, timeoutMs: 3000, maxBytes: 2048 });
+  const python = await runCommand('python3', ['-c', 'import rclpy'], {
+    cwd,
+    timeoutMs: 3000,
+    maxBytes: 2048,
+  });
   const warnings: string[] = [];
-  if (!env.ROS_DISTRO) warnings.push("ROS_DISTRO is not set; source a ROS 2 setup file before runtime operations.");
-  if (!workspace) warnings.push("No workspace with a src directory was found from the current directory.");
+  if (!env.ROS_DISTRO)
+    warnings.push('ROS_DISTRO is not set; source a ROS 2 setup file before runtime operations.');
+  if (!workspace)
+    warnings.push('No workspace with a src directory was found from the current directory.');
   return {
     distro: env.ROS_DISTRO,
     rmwImplementation: env.RMW_IMPLEMENTATION,
@@ -66,5 +77,5 @@ export async function detectEnvironment(cwd: string): Promise<RosEnvironment> {
 }
 
 export async function listWorkspaceEntries(workspace: string): Promise<string[]> {
-  return readdir(join(workspace, "src"));
+  return readdir(join(workspace, 'src'));
 }

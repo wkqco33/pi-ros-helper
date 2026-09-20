@@ -4,14 +4,19 @@ All notable changes are documented here.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-09-20
+
 ### Added
 
 - Unit-test coverage for graph diffing, parameter diffing, colcon classification, scaffold validation, and safety rules.
 - Repository development guide in `AGENTS.md`.
+- ROS interface scaffold preview for msg, srv, and action definitions.
+- Prettier formatting checks.
 
 ### Changed
 
 - Test command now runs TypeScript tests through `tsx`.
+- CI now tests ROS 2 Humble and Jazzy container smoke cases.
 
 ## [0.1.0] - 2026-09-12
 
