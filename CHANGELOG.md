@@ -4,6 +4,14 @@ All notable changes are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- `skills/ros2-development/SKILL.md` now declares the required `name` and `description` frontmatter, so pi loads the skill instead of warning `description is required` under `[Skill conflicts]`.
+
+### Added
+
+- Regression test asserting every bundled skill declares valid frontmatter that pi can load.
+
 ## [0.1.1] - 2026-09-20
 
 ### Added

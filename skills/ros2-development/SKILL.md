@@ -1,3 +1,9 @@
+---
+name: ros2-development
+description: ROS 2 development workflow with pi-ros-helper. Use when inspecting a ROS 2 environment, workspace, or package, building with colcon, diagnosing runtime graph, QoS, TF, topic, parameter, log, launch, or rosbag issues, or scaffolding ROS 2 packages, nodes, and interfaces.
+license: Apache-2.0
+---
+
 # ROS 2 development with pi-ros-helper
 
 Use the ROS-specific tools before falling back to raw shell commands.
