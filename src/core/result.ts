@@ -1,84 +1,30 @@
+/**
+ * Local shim over the shared `pi-helper-core` envelope.
+ *
+ * Every tool imports `result`/`failure` and the shared types from here, so the
+ * envelope is defined in exactly one place (`pi-helper-core`) while call sites
+ * stay unaware of that. The shared envelope adds `attention` (ROS previously
+ * lacked it) and replaces the unused `metadata.rosDistro` field with the
+ * ecosystem-neutral `metadata.toolchain`.
+ */
+import { createResultFactory } from 'pi-helper-core';
 import { TOOL_VERSION } from './version.ts';
 
-export type DiagnosticSeverity = 'info' | 'warning' | 'error';
+export const { result, failure } = createResultFactory(TOOL_VERSION);
 
-export interface Diagnostic {
-  code?: string;
-  message: string;
-  severity: DiagnosticSeverity;
-  path?: string;
-  line?: number;
-}
+export { CORE_SCHEMA_VERSION, isActionable, note, warn } from 'pi-helper-core';
 
-export interface Evidence {
-  kind: string;
-  message?: string;
-  [key: string]: unknown;
-}
+export type {
+  CommandPreview,
+  CommandRisk,
+  Diagnostic,
+  Evidence,
+  Severity,
+  Suggestion,
+  ToolchainInfo,
+  ToolResult,
+} from 'pi-helper-core';
 
-export interface Suggestion {
-  message: string;
-  confidence?: 'low' | 'medium' | 'high';
-  command?: string;
-}
-
-export interface CommandPreview {
-  executable: string;
-  args: string[];
-  cwd?: string;
-}
-
-export interface ToolMetadata {
-  toolVersion: string;
-  cwd: string;
-  durationMs: number;
-  truncated: boolean;
-  rosDistro?: string;
-}
-
-export interface RosToolResult<T = unknown> {
-  ok: boolean;
-  summary: string;
-  data?: T;
-  evidence: Evidence[];
-  warnings: Diagnostic[];
-  errors: Diagnostic[];
-  suggestions: Suggestion[];
-  commands?: CommandPreview[];
-  metadata: ToolMetadata;
-}
-
-export function result<T>(
-  cwd: string,
-  startedAt: number,
-  value: Omit<RosToolResult<T>, 'metadata'> & { truncated?: boolean; rosDistro?: string },
-): RosToolResult<T> {
-  return {
-    ...value,
-    metadata: {
-      toolVersion: TOOL_VERSION,
-      cwd,
-      durationMs: Date.now() - startedAt,
-      truncated: value.truncated ?? false,
-      rosDistro: value.rosDistro,
-    },
-  };
-}
-
-export function failure(
-  cwd: string,
-  startedAt: number,
-  message: string,
-  code: string,
-  details?: Partial<RosToolResult>,
-): RosToolResult {
-  return result(cwd, startedAt, {
-    ok: false,
-    summary: message,
-    evidence: [],
-    warnings: [],
-    errors: [{ code, message, severity: 'error' }],
-    suggestions: [],
-    ...details,
-  });
-}
+/** The ROS tools' view of the shared envelope. */
+export type RosToolResult<T = unknown> = import('pi-helper-core').ToolResult<T>;
+export type DiagnosticSeverity = import('pi-helper-core').Severity;

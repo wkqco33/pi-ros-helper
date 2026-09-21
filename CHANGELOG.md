@@ -2,6 +2,17 @@
 
 All notable changes are documented here.
 
+## [Unreleased]
+
+### Changed
+
+- Adopt `pi-helper-core` (`^0.1.1`) for the shared response envelope, bounded command runner, TDD checkpoint, and completion-evidence gate. `src/core/result.ts` and `src/core/runner.ts` are now thin shims and the gates supply only ROS signals and labels.
+- **Breaking:** every tool response now carries `attention` (`true` when the caller must act), matching the other helpers. The unused `metadata.rosDistro` field is removed.
+
+### Added
+
+- `test/core-dependency.test.ts` pins the `pi-helper-core` dependency and the shared behaviours the ROS gates delegate to.
+
 ## [0.1.11] - 2026-09-20
 
 ### Changed

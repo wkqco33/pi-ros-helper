@@ -1,41 +1,27 @@
-export interface TddCheckpoint {
-  ok: boolean;
-  reasons: string[];
-  sourceChanges: string[];
-  testChanges: string[];
-}
+/**
+ * ROS's view of the shared TDD checkpoint.
+ *
+ * The token-overlap matching lives in `pi-helper-core`; this module only says
+ * which files are production code or tests in a ROS package, so call sites keep
+ * their two-argument signature.
+ */
+import { checkTdd as coreCheckTdd, type TddSignals } from 'pi-helper-core';
 
 const SOURCE = /(?:^|\/)(?:src|include)\/.*\.(?:c|cc|cpp|cxx|h|hh|hpp|hxx|py)$/i;
 const TEST = /(?:^|\/)(?:test|tests)\/|(?:^|\/)test_[^/]+\.(?:cpp|cc|cxx|py)$/i;
 
-export function checkTdd(changedPaths: string[], testChangedPaths: string[]): TddCheckpoint {
-  const sourceChanges = changedPaths.filter((path) => SOURCE.test(path));
-  const testChanges = [...changedPaths, ...testChangedPaths].filter((path) => TEST.test(path));
-  const sourceTokens = sourceChanges.flatMap((path) =>
-    path
-      .toLowerCase()
-      .split(/[^a-z0-9]+/)
-      .filter((token) => token.length >= 4 && token !== 'src'),
-  );
-  const relatedTest = testChanges.some((path) => {
-    const testTokens = path
-      .toLowerCase()
-      .split(/[^a-z0-9]+/)
-      .filter((token) => token.length >= 4 && token !== 'test' && token !== 'tests');
-    return sourceTokens.some((source) =>
-      testTokens.some(
-        (test) => source === test || source.startsWith(test) || test.startsWith(source),
-      ),
-    );
-  });
-  const reasons =
-    sourceChanges.length && !relatedTest
-      ? ['Source changes have no corresponding related test changes.']
-      : [];
-  return {
-    ok: reasons.length === 0,
-    reasons,
-    sourceChanges,
-    testChanges: [...new Set(testChanges)],
-  };
+const ROS_TDD_SIGNALS: TddSignals = {
+  isSourceFile: (path) => SOURCE.test(path),
+  isTestFile: (path) => TEST.test(path),
+  prefixTokens: new Set(['src', 'test', 'tests']),
+  minTokenLength: 4,
+};
+
+export function checkTdd(
+  changedPaths: string[],
+  testChangedPaths: string[] = [],
+): import('pi-helper-core').TddCheckpoint {
+  return coreCheckTdd(changedPaths, testChangedPaths, ROS_TDD_SIGNALS);
 }
+
+export type { TddAssociation, TddCheckpoint } from 'pi-helper-core';

@@ -23,6 +23,8 @@ ros2 topic list -t
 
 ## 구현 규칙 (Implementation rules)
 
+- 공통 응답 envelope, 범위 제한 실행기, TDD 체크포인트, 완료 증거 게이트는 `pi-helper-core`가 단일 진실입니다. `src/core/{result,runner}.ts`는 shim이고 `src/validation/{tdd,evidence}.ts`는 ROS 시그널·라벨만 주입합니다. 이들을 다시 구현하지 마세요. 빌드+테스트 전용 게이트(`src/validation/bundle.ts`), CTest 타겟 선별(`src/build/selection.ts`), 컴파일된 테스트 바이너리 staleness(`src/build/staleness.ts`)는 ROS 고유 로직이라 로컬에 남습니다.
+
 - 사용자 입력을 쉘 문자열로 직접 보간(interpolation)하지 말고, 반드시 `pi.exec` 또는 공용 러너(`runCommand`)를 사용하세요.
 - 서브프로세스는 타임아웃, 작업 취소(AbortSignal), 출력 크기 제한을 적용하여 실행 범위를 엄격히 제한(bounded)하세요.
 - 모든 도구는 공통 `RosToolResult` 규격의 형태를 반환해야 합니다.

@@ -1,22 +1,36 @@
-export interface CompletionEvidence {
-  ok: boolean;
-  blockers: string[];
-  changedPaths: string[];
-}
+/**
+ * ROS's view of the shared completion-evidence gate.
+ *
+ * The gate lives in `pi-helper-core`; this module maps ROS's build step onto
+ * the core's preparation stage so call sites keep their existing input shape.
+ */
+import {
+  buildCompletionEvidence as coreBuildCompletionEvidence,
+  type CompletionEvidence,
+} from 'pi-helper-core';
 
-export function buildCompletionEvidence(input: {
+export interface CompletionEvidenceInput {
   buildExecuted: boolean;
   buildOk: boolean;
   testExecuted: boolean;
   testOk: boolean;
   stale: boolean;
   changedPaths: string[];
-}): CompletionEvidence {
-  const blockers: string[] = [];
-  if (!input.buildExecuted) blockers.push('Build was not executed.');
-  else if (!input.buildOk) blockers.push('Build did not pass.');
-  if (!input.testExecuted) blockers.push('Test was not executed.');
-  else if (!input.testOk) blockers.push('Tests did not pass.');
-  if (input.stale) blockers.push('Stale test artifacts were detected.');
-  return { ok: blockers.length === 0, blockers, changedPaths: input.changedPaths };
+}
+
+export type { CompletionEvidence };
+
+export function buildCompletionEvidence(input: CompletionEvidenceInput): CompletionEvidence {
+  return coreBuildCompletionEvidence({
+    preparation: {
+      name: 'build',
+      label: 'build',
+      executed: input.buildExecuted,
+      ok: input.buildOk,
+    },
+    testExecuted: input.testExecuted,
+    testOk: input.testOk,
+    stale: input.stale,
+    changedPaths: input.changedPaths,
+  });
 }
