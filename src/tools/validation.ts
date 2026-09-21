@@ -21,13 +21,18 @@ export function registerValidationTools(pi: ExtensionAPI): void {
     parameters: Type.Object({
       changedPaths: Type.Optional(Type.Array(Type.String(), { maxItems: 500 })),
       testChangedPaths: Type.Optional(Type.Array(Type.String(), { maxItems: 500 })),
+      path: Type.Optional(
+        Type.String({
+          description: 'Project directory for git discovery; defaults to the session cwd.',
+        }),
+      ),
     }),
     async execute(_id, params, _signal, _update, ctx) {
       const started = Date.now();
       let changedPaths = params.changedPaths ?? [];
       if (!changedPaths.length) {
         const diff = await runCommand('git', ['diff', '--name-only', 'HEAD'], {
-          cwd: ctx.cwd,
+          cwd: params.path ?? ctx.cwd,
           timeoutMs: 10_000,
           maxBytes: 50_000,
         });
@@ -138,10 +143,16 @@ export function registerValidationTools(pi: ExtensionAPI): void {
       ),
       execute: Type.Optional(Type.Boolean()),
       timeoutSeconds: Type.Optional(Type.Integer({ minimum: 1, maximum: 3600 })),
+      path: Type.Optional(
+        Type.String({
+          description: 'Workspace directory to validate; defaults to the session cwd.',
+        }),
+      ),
     }),
     async execute(_id, params, signal, _update, ctx) {
       const started = Date.now();
-      const workspace = await inspectWorkspace(ctx.cwd);
+      // Run colcon where the workspace actually is, not in the session cwd.
+      const workspace = await inspectWorkspace(params.path ?? ctx.cwd);
       if (!workspace.root)
         return text(
           failure(ctx.cwd, started, 'No ROS 2 workspace was found.', 'WORKSPACE_NOT_FOUND'),

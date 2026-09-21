@@ -14,11 +14,15 @@ export function registerEnvironmentTools(pi: ExtensionAPI): void {
     promptGuidelines: [
       'Use ros_environment before runtime ROS 2 diagnostics when the environment is unknown.',
     ],
-    parameters: Type.Object({}),
-    async execute(_id, _params, _signal, _update, ctx) {
+    parameters: Type.Object({
+      path: Type.Optional(
+        Type.String({ description: 'Directory to inspect; defaults to the session cwd.' }),
+      ),
+    }),
+    async execute(_id, params, _signal, _update, ctx) {
       const started = Date.now();
       try {
-        const data = await detectEnvironment(ctx.cwd);
+        const data = await detectEnvironment(params.path ?? ctx.cwd);
         return text(
           result(ctx.cwd, started, {
             ok: data.ros2Available,
