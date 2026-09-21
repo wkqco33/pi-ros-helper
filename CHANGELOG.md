@@ -4,6 +4,12 @@ All notable changes are documented here.
 
 ## [Unreleased]
 
+## [0.1.14] - 2026-09-21
+
+### Fixed
+
+- `ros_launch_analyze`/`ros_launch_validate` now extract the include path from `PythonLaunchDescriptionSource('…')` and the other `*LaunchDescriptionSource` wrappers. The common `IncludeLaunchDescription(PythonLaunchDescriptionSource('child.launch.py'))` nests the path one call deeper than `IncludeLaunchDescription('…')`, so it was reported as `includes: []` and a missing included launch file went undetected. A path computed with `PathJoinSubstitution`/`FindPackageShare` is still not a string literal and stays unextracted rather than being guessed.
+
 ## [0.1.13] - 2026-09-21
 
 ### Fixed
