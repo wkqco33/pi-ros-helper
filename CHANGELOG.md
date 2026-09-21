@@ -4,6 +4,8 @@ All notable changes are documented here.
 
 ## [Unreleased]
 
+## [0.1.12] - 2026-09-21
+
 ### Changed
 
 - Adopt `pi-helper-core` (`^0.1.1`) for the shared response envelope, bounded command runner, TDD checkpoint, and completion-evidence gate. `src/core/result.ts` and `src/core/runner.ts` are now thin shims and the gates supply only ROS signals and labels.
