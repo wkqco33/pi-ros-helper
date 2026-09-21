@@ -4,6 +4,12 @@ All notable changes are documented here.
 
 ## [Unreleased]
 
+## [0.1.13] - 2026-09-21
+
+### Fixed
+
+- `ros_build`, `ros_test`, `ros_validation_bundle`, `ros_environment`, and `ros_tdd_checkpoint` now accept an optional `path` and resolve the workspace / git repository from it instead of only from `ctx.cwd`. Without it, a workspace reached through `path` while the session ran elsewhere reported `WORKSPACE_NOT_FOUND` or discovered the wrong tree.
+
 ## [0.1.12] - 2026-09-21
 
 ### Changed
