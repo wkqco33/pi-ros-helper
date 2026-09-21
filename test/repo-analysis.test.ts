@@ -7,6 +7,7 @@ import { inspectWorkspace } from '../src/workspace/inspect.ts';
 import { findWorkspace } from '../src/environment/discovery.ts';
 import { analyzePackage, resolvePackage } from '../src/package/analyze.ts';
 import { analyzeLaunch } from '../src/launch/analyze.ts';
+import { validateLaunch } from '../src/launch/validate.ts';
 import { scaffold } from '../src/generate/scaffold.ts';
 import { interfaceScaffold } from '../src/generate/interface.ts';
 import { isHighRiskTopic, riskForTopic } from '../src/core/safety.ts';
@@ -176,6 +177,44 @@ test('launch analysis still warns when no node is identifiable', async () => {
     assert.deepEqual(analysis.nodes, []);
     assert.ok(analysis.warnings.includes('No statically identifiable nodes were found.'));
   });
+});
+
+const NESTED_INCLUDE_LAUNCH = [
+  'from launch import LaunchDescription',
+  'from launch.actions import IncludeLaunchDescription',
+  'from launch.launch_description_sources import PythonLaunchDescriptionSource',
+  '',
+  'def generate_launch_description():',
+  '    return LaunchDescription([',
+  '        IncludeLaunchDescription(',
+  "            PythonLaunchDescriptionSource('missing.launch.py')",
+  '        ),',
+  '    ])',
+  '',
+].join('\n');
+
+test('launch analysis extracts a nested PythonLaunchDescriptionSource include', async () => {
+  await withFixture({ 'demo.launch.py': NESTED_INCLUDE_LAUNCH }, async (dir) => {
+    const path = join(dir, 'demo.launch.py');
+    const analysis = await analyzeLaunch(path);
+    // The include is one call deeper than `IncludeLaunchDescription("…")`.
+    assert.deepEqual(analysis.includes, ['missing.launch.py']);
+    const validation = validateLaunch(analysis, [path]);
+    assert.equal(validation.ok, false);
+    assert.deepEqual(validation.missingFiles, [join(dir, 'missing.launch.py')]);
+  });
+});
+
+test('a nested include that exists resolves relative to the launch file', async () => {
+  await withFixture(
+    { 'demo.launch.py': NESTED_INCLUDE_LAUNCH, 'missing.launch.py': 'x = 1\n' },
+    async (dir) => {
+      const path = join(dir, 'demo.launch.py');
+      const analysis = await analyzeLaunch(path);
+      const validation = validateLaunch(analysis, [path, join(dir, 'missing.launch.py')]);
+      assert.deepEqual(validation.missingFiles, []);
+    },
+  );
 });
 
 test('publisher and subscriber scaffolds emit distinct ROS 2 code', () => {

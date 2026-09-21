@@ -102,7 +102,14 @@ export async function analyzeLaunch(path: string): Promise<LaunchAnalysis> {
           ? yamlNodes(source)
           : [...pythonNodes(source), ...xmlNodes(source), ...yamlNodes(source)];
   const includes = [
+    // `IncludeLaunchDescription("...")`, `include "..."`, `file="..."`.
     ...source.matchAll(/(?:IncludeLaunchDescription|include|file)\s*[(:=]\s*["']([^"']+)/g),
+    // The common `IncludeLaunchDescription(PythonLaunchDescriptionSource(path))`
+    // nests the path one call deeper, so the pattern above never sees it. Match
+    // any `*LaunchDescriptionSource("...")` wrapper (`Python`, `Any`, `Frontend`,
+    // `XML`, `YAML`). A computed path built from `PathJoinSubstitution` is not a
+    // string literal and stays unextracted rather than being guessed.
+    ...source.matchAll(/\b[A-Za-z]*LaunchDescriptionSource\s*\(\s*["']([^"']+)["']/g),
   ].map((m) => m[1]);
   const argumentsFound = [
     ...source.matchAll(/(?:DeclareLaunchArgument|arg)\s*[(:=]\s*["']([^"']+)/g),
